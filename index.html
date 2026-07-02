@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Center Cleaning Checklist</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background-color: #f4f6f9; color: #333; }
+        .navbar { display: flex; background-color: #2c3e50; padding: 10px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .nav-btn { background: none; border: none; color: #ecf0f1; padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 4px; transition: 0.3s; margin-right: 10px; }
+        .nav-btn:hover, .nav-btn.active { background-color: #34495e; color: #3498db; font-weight: bold; }
+        
+        .container { max-width: 1200px; margin: 30px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .reminder { color: #e74c3c; font-weight: bold; font-size: 14px; background: #fadbd8; padding: 10px; border-radius: 5px; border-left: 5px solid #e74c3c; }
+        
+        .day-section { margin-bottom: 30px; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; transition: 0.3s; }
+        .day-header { background: #34495e; color: white; padding: 12px 20px; font-size: 18px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .day-section.grayed-out { opacity: 0.3; filter: grayscale(100%); background-color: #f2f4f4; }
+        .gray-btn { background: #e74c3c; border: none; color: white; padding: 5px 10px; cursor: pointer; border-radius: 3px; font-size: 12px; }
+        
+        .task-row { display: grid; grid-template-columns: 150px 1fr 80px 120px; padding: 12px 20px; border-bottom: 1px solid #eee; align-items: center; background: #fff; }
+        .task-row:hover { background: #fdfefe; }
+        .task-section-label { font-weight: bold; color: #7f8c8d; text-transform: uppercase; font-size: 12px; }
+        .task-desc { font-size: 15px; }
+        .initials-input { width: 80px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+        
+        .draggable { cursor: grab; }
+        .draggable:active { cursor: grabbing; }
+        .dropzone { min-height: 50px; }
+    </style>
+</head>
+<body>
+
+    <div class="navbar">
+        <button class="nav-btn active" onclick="switchTab('Current Week', this)">This Week</button>
+        <button class="nav-btn" onclick="switchTab('Archive Log', this)">Last Week</button>
+        <button class="nav-btn" onclick="switchTab('Next Week', this)">Next Week</button>
+        <button class="nav-btn" onclick="switchTab('Master Task List', this)">Default Week</button>
+    </div>
+
+    <div class="container">
+        <div class="header-bar">
+            <h2>Cleaning Checklist Dashboard</h2>
+            <div class="reminder">REMINDER: Report Behavior issues to CD right away. Especially if disruptive, distracting, or disrespectful.</div>
+        </div>
+        <div id="checklist-content">Loading tasks...</div>
+    </div>
+
+    <script>
+        // PASTE YOUR GOOGLE WEB APP URL INSIDE THE QUOTES BELOW
+        const API_URL = "https://script.google.com/macros/s/AKfycby9jgy-uejmEHw9P1OMAZqrGx0VXBKNZjS-GkjYy41EHxpGo-ie1uvxMJODUWKy3FutbA/exec"; 
+        
+        let currentTabName = "Current Week";
+        let taskData = [];
+
+        async function fetchTasks(sheetName) {
+            document.getElementById('checklist-content').innerHTML = "Loading tasks from center database...";
+            try {
+                const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheetName)}`);
+                taskData = await response.json();
+                renderChecklist();
+            } catch (error) {
+                document.getElementById('checklist-content').innerHTML = "Error loading data. Verify deployment setup.";
+            }
+        }
+
+        function renderChecklist() {
+            const container = document.getElementById('checklist-content');
+            container.innerHTML = "";
+
+            const days = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
+            
+            days.forEach(day => {
+                const dayTasks = taskData.filter(t => t.Day === day || (currentTabName === 'Master Task List' && t.ScheduleType === day));
+                
+                // If it's a default template layout view, fallback context
+                let displayTasks = dayTasks;
+                if(currentTabName === 'Master Task List') {
+                    displayTasks = taskData.filter(t => t.ScheduleType === day || (t.ScheduleType === 'Daily'));
+                }
+
+                if (displayTasks.length === 0 && currentTabName !== 'Next Week') return;
+
+                const daySection = document.createElement('div');
+                daySection.className = "day-section";
+                daySection.id = `section-${day}`;
+
+                const header = document.createElement('div');
+                header.className = "day-header";
+                header.innerHTML = `<span>${day} Tasks</span>`;
+
+                if (currentTabName === "Next Week") {
+                    const grayBtn = document.createElement('button');
+                    grayBtn.className = "gray-btn";
+                    grayBtn.innerText = "Gray Out / Activate Day";
+                    grayBtn.onclick = () => document.getElementById(`section-${day}`).classList.toggle('grayed-out');
+                    header.appendChild(grayBtn);
+                }
+
+                const taskListContainer = document.createElement('div');
+                taskListContainer.className = "dropzone";
+                taskListContainer.dataset.day = day;
+
+                if (currentTabName === "Next Week") {
+                    taskListContainer.ondragover = (e) => e.preventDefault();
+                    taskListContainer.ondrop = (e) => {
+                        e.preventDefault();
+                        const rowNum = e.dataTransfer.getData("text/plain");
+                        const item = taskData.find(t => t.rowNum == rowNum);
+                        if (item) {
+                            item.Day = day;
+                            updateCellOnSheet(item.rowNum, 1, day, "Next Week");
+                            renderChecklist();
+                        }
+                    };
+                }
+
+                displayTasks.forEach(task => {
+                    const row = document.createElement('div');
+                    row.className = "task-row" + (currentTabName === "Next Week" ? " draggable" : "");
+                    if (currentTabName === "Next Week") {
+                        row.draggable = true;
+                        row.ondragstart = (e) => e.dataTransfer.setData("text/plain", task.rowNum);
+                    }
+
+                    const isChecked = task["Done?"] === true || task["Done?"] === "TRUE";
+                    
+                    row.innerHTML = `
+                        <div class="task-section-label">${task.Section || task.ScheduleType || ''}</div>
+                        <div class="task-desc">${task["Task Description"] || ''}</div>
+                        <div>
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} 
+                                   ${(currentTabName === 'Archive Log' || currentTabName === 'Master Task List') ? 'disabled' : ''}
+                                   onchange="toggleCheck(${task.rowNum}, this.checked)">
+                        </div>
+                        <div>
+                            <input type="text" class="initials-input" value="${task.Initials || ''}" placeholder="Initials"
+                                   ${(currentTabName === 'Archive Log' || currentTabName === 'Master Task List') ? 'disabled' : ''}
+                                   onblur="updateInitials(${task.rowNum}, this.value)">
+                        </div>
+                    `;
+                    taskListContainer.appendChild(row);
+                });
+
+                daySection.appendChild(header);
+                daySection.appendChild(taskListContainer);
+                container.appendChild(daySection);
+            });
+        }
+
+        async function toggleCheck(rowNum, isChecked) {
+            updateCellOnSheet(rowNum, 4, isChecked ? "TRUE" : "FALSE", currentTabName);
+        }
+
+        async function updateInitials(rowNum, initials) {
+            updateCellOnSheet(rowNum, 5, initials, currentTabName);
+        }
+
+        async function updateCellOnSheet(rowNum, colNum, value, sheet) {
+            await fetch(API_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "updateCell", rowNum, colNum, value, sheet })
+            });
+        }
+
+        function switchTab(tabName, btnElement) {
+            currentTabName = tabName;
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+            fetchTasks(tabName);
+        }
+
+        fetchTasks("Current Week");
+    </script>
+</body>
+</html>
