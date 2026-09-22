@@ -61,18 +61,21 @@ function renderChecklist() {
         if (dayTasks.length === 0 && !isNextWeekTab) return;
 
         const daySection = document.createElement('div');
-        daySection.className = "day-section" + (!operatingDays.includes(day) ? " grayed-out" : "");
+        daySection.className = "day-section" + (!operatingDays.includes(day) && !isNextWeekTab ? " grayed-out" : "");
         daySection.id = `section-${day}`;
 
         const header = document.createElement('div');
         header.className = "day-header";
-        header.innerHTML = `<span>${day} Tasks ${!operatingDays.includes(day) ? '(Non-Operating)' : ''}</span>`;
+        header.innerHTML = `<span>${day} Tasks ${!operatingDays.includes(day) && !isNextWeekTab ? '(Non-Operating)' : ''}</span>`;
 
         if (isNextWeekTab) {
             const grayBtn = document.createElement('button');
             grayBtn.className = "gray-btn";
             grayBtn.innerText = "Gray Out / Activate Day";
-            grayBtn.onclick = () => document.getElementById(`section-${day}`).classList.toggle('grayed-out');
+            grayBtn.onclick = () => {
+                const sec = document.getElementById(`section-${day}`);
+                sec.classList.toggle('hidden-day');
+            };
             header.appendChild(grayBtn);
         }
 
@@ -91,15 +94,24 @@ function renderChecklist() {
 
             let actionControlsHtml = "";
             if (isNextWeekTab) {
-                // Dropdown selector to reassign task day for Next Week
-                actionControlsHtml = `
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <select class="day-select" onchange="reassignTaskDay(${task.rowNum}, this.value)">
-                            ${allDays.map(d => `<option value="${d}" ${d === day ? 'selected' : ''}>${d}</option>`).join('')}
-                        </select>
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCheck(${task.rowNum}, this.checked)">
-                    </div>
-                `;
+                if (isDaily) {
+                    // Daily tasks cannot be moved in Next Week
+                    actionControlsHtml = `
+                        <div>
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCheck(${task.rowNum}, this.checked)">
+                        </div>
+                    `;
+                } else {
+                    // Weekly tasks feature day dropdown selector
+                    actionControlsHtml = `
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select class="day-select" onchange="reassignTaskDay(${task.rowNum}, this.value)">
+                                ${allDays.map(d => `<option value="${d}" ${d === day ? 'selected' : ''}>${d}</option>`).join('')}
+                            </select>
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCheck(${task.rowNum}, this.checked)">
+                        </div>
+                    `;
+                }
             } else {
                 actionControlsHtml = `
                     <div>
