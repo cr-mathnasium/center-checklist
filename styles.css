@@ -1,168 +1,47 @@
-body { 
-    font-family: 'Segoe UI', Arial, sans-serif; 
-    margin: 0; 
-    background-color: #f4f6f9; 
-    color: #333; 
+/* Settings and Add Task Bars */
+.days-selector-bar, .add-task-bar {
+    background-color: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    padding: 12px 20px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
 }
 
-.navbar { 
-    display: flex; 
-    background-color: #2c3e50; 
-    padding: 10px 20px; 
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+.days-selector-bar label {
+    margin-right: 10px;
+    cursor: pointer;
+    font-weight: 500;
 }
 
-.nav-btn { 
-    background: none; 
-    border: none; 
-    color: #ecf0f1; 
-    padding: 10px 20px; 
-    font-size: 16px; 
-    cursor: pointer; 
-    border-radius: 4px; 
-    transition: 0.3s; 
-    margin-right: 10px; 
+.add-task-bar input, .add-task-bar select, .edit-input, .edit-select {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
 }
 
-.nav-btn:hover, .nav-btn.active { 
-    background-color: #34495e; 
-    color: #3498db; 
-    font-weight: bold; 
+.add-task-bar input[type="text"] {
+    flex: 1;
+    min-width: 150px;
 }
 
-.container { 
-    max-width: 1200px; 
-    margin: 30px auto; 
-    padding: 20px; 
-    background: white; 
-    border-radius: 8px; 
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
-}
-
-.header-bar { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    border-bottom: 2px solid #eee; 
-    padding-bottom: 15px; 
-    margin-bottom: 20px; 
-}
-
-.reminder { 
-    color: #e74c3c; 
-    font-weight: bold; 
-    font-size: 14px; 
-    background: #fadbd8; 
-    padding: 10px; 
-    border-radius: 5px; 
-    border-left: 5px solid #e74c3c; 
-}
-
-.day-section { 
-    margin-bottom: 30px; 
-    border: 1px solid #e0e0e0; 
-    border-radius: 6px; 
-    overflow: hidden; 
-    transition: 0.3s; 
-}
-
-.day-header { 
-    background: #34495e; 
-    color: white; 
-    padding: 12px 20px; 
-    font-size: 18px; 
-    font-weight: bold; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-}
-
-.day-section.grayed-out { 
-    opacity: 0.3; 
-    filter: grayscale(100%); 
-    background-color: #f2f4f4; 
-}
-
-.gray-btn { 
-    background: #e74c3c; 
-    border: none; 
-    color: white; 
-    padding: 5px 10px; 
-    cursor: pointer; 
-    border-radius: 3px; 
-    font-size: 12px; 
-}
-
-.task-row { 
-    display: grid; 
-    grid-template-columns: 160px 1fr 80px 120px; 
-    padding: 12px 20px; 
-    border-bottom: 1px solid #eee; 
-    align-items: center; 
-    background: #fff; 
-}
-
-.task-row:hover { 
-    background: #fdfefe; 
-}
-
-/* Daily vs Weekly task row styling */
-.task-row.is-daily {
-    border-left: 4px solid #3498db;
-}
-
-.task-row.is-weekly {
-    border-left: 4px solid #e67e22;
-    background-color: #fffdf9;
-}
-
-.task-section-label { 
-    font-weight: bold; 
-    color: #7f8c8d; 
-    text-transform: uppercase; 
-    font-size: 12px; 
-}
-
-.task-type-badge {
-    font-size: 10px;
+.action-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 7px 15px;
+    border-radius: 4px;
+    cursor: pointer;
     font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    display: inline-block;
-    margin-top: 3px;
+    transition: 0.2s;
 }
 
-.badge-daily {
-    background-color: #ebf5fb;
-    color: #2980b9;
-}
-
-.badge-weekly {
-    background-color: #fef5e7;
-    color: #d35400;
-}
-
-.task-desc { 
-    font-size: 15px; 
-}
-
-.initials-input { 
-    width: 80px; 
-    padding: 5px; 
-    border: 1px solid #ccc; 
-    border-radius: 4px; 
-    text-align: center; 
-}
-
-.draggable { 
-    cursor: grab; 
-}
-
-.draggable:active { 
-    cursor: grabbing; 
-}
-
-.dropzone { 
-    min-height: 50px; 
-}
+.action-btn:hover { background-color: #2980b9; }
+.action-btn.green-btn { background-color: #2ecc71; }
+.action-btn.green-btn:hover { background-color: #27ae60; }
+.action-btn.danger-btn { background-color: #e74c3c; padding: 4px 8px; font-size: 12px; }
+.action-btn.danger-btn:hover { background-color: #c0392b; }
