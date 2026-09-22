@@ -2,7 +2,8 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzH3Nv579kC_f5w-YXXYmOi
 
 let currentTabName = "Current Week";
 let taskData = [];
-let operatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
+let masterOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
+let nextWeekOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
 const allDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
 
 async function fetchTasks(sheetName) {
@@ -11,13 +12,12 @@ async function fetchTasks(sheetName) {
         const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheetName)}`);
         const json = await response.json();
         
-        if (json && json.operatingDays) {
-            operatingDays = json.operatingDays;
+        if (json && json.masterOperatingDays) {
+            masterOperatingDays = json.masterOperatingDays;
+            nextWeekOperatingDays = json.nextWeekOperatingDays || json.masterOperatingDays;
             taskData = Array.isArray(json.tasks) ? json.tasks : [];
         } else if (Array.isArray(json)) {
             taskData = json;
-        } else if (json && Array.isArray(json.tasks)) {
-            taskData = json.tasks;
         } else {
             taskData = [];
         }
@@ -60,21 +60,34 @@ function renderChecklist() {
 
         if (dayTasks.length === 0 && !isNextWeekTab) return;
 
+        // Next Week checks nextWeekOperatingDays; Current Week shows all present tasks
+        const isDayActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
+
         const daySection = document.createElement('div');
-        daySection.className = "day-section" + (!operatingDays.includes(day) && !isNextWeekTab ? " grayed-out" : "");
+        daySection.className = "day-section" + (!isDayActive ? " hidden-day" : "");
         daySection.id = `section-${day}`;
 
         const header = document.createElement('div');
         header.className = "day-header";
-        header.innerHTML = `<span>${day} Tasks ${!operatingDays.includes(day) && !isNextWeekTab ? '(Non-Operating)' : ''}</span>`;
+        header.innerHTML = `<span>${day} Tasks ${!isDayActive ? '(Grayed Out)' : ''}</span>`;
 
         if (isNextWeekTab) {
             const grayBtn = document.createElement('button');
             grayBtn.className = "gray-btn";
-            grayBtn.innerText = "Gray Out / Activate Day";
-            grayBtn.onclick = () => {
-                const sec = document.getElementById(`section-${day}`);
-                sec.classList.toggle('hidden-day');
+            grayBtn.innerText = isDayActive ? "Gray Out Day" : "Activate Day";
+            grayBtn.onclick = async () => {
+                if (nextWeekOperatingDays.includes(day)) {
+                    nextWeekOperatingDays = nextWeekOperatingDays.filter(d => d !== day);
+                } else {
+                    nextWeekOperatingDays.push(day);
+                }
+                await fetch(API_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "saveNextWeekOperatingDays", days: nextWeekOperatingDays })
+                });
+                renderChecklist();
             };
             header.appendChild(grayBtn);
         }
@@ -95,14 +108,12 @@ function renderChecklist() {
             let actionControlsHtml = "";
             if (isNextWeekTab) {
                 if (isDaily) {
-                    // Daily tasks cannot be moved in Next Week
                     actionControlsHtml = `
                         <div>
                             <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleCheck(${task.rowNum}, this.checked)">
                         </div>
                     `;
                 } else {
-                    // Weekly tasks feature day dropdown selector
                     actionControlsHtml = `
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <select class="day-select" onchange="reassignTaskDay(${task.rowNum}, this.value)">
@@ -216,21 +227,21 @@ function renderDayCheckboxes() {
     const boxContainer = document.getElementById('day-checkboxes');
     boxContainer.innerHTML = allDays.map(d => `
         <label>
-            <input type="checkbox" value="${d}" ${operatingDays.includes(d) ? 'checked' : ''}> ${d}
+            <input type="checkbox" value="${d}" ${masterOperatingDays.includes(d) ? 'checked' : ''}> ${d}
         </label>
     `).join('');
 }
 
 async function saveOperatingDays() {
     const checked = Array.from(document.querySelectorAll('#day-checkboxes input:checked')).map(cb => cb.value);
-    operatingDays = checked;
+    masterOperatingDays = checked;
     await fetch(API_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveOperatingDays", days: checked })
+        body: JSON.stringify({ action: "saveMasterOperatingDays", days: checked })
     });
-    alert("Operating days updated!");
+    alert("Master Operating Days updated!");
     renderChecklist();
 }
 
