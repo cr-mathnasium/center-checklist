@@ -20,10 +20,34 @@
             <h2>Cleaning Checklist Dashboard</h2>
             <div class="reminder">REMINDER: Report Behavior issues to CD right away. Especially if disruptive, distracting, or disrespectful.</div>
         </div>
+
+        <!-- Operating Days Selector (Visible on Default Week Tab) -->
+        <div id="days-selector-container" class="days-selector-bar" style="display: none;">
+            <strong>Operating Days:</strong>
+            <div id="day-checkboxes"></div>
+            <button class="action-btn" onclick="saveOperatingDays()">Save Operating Days</button>
+        </div>
+
+        <!-- Add Task Controls (Visible on Default Week Tab) -->
+        <div id="add-task-container" class="add-task-bar" style="display: none;">
+            <input type="text" id="new-section" placeholder="Section (e.g. Kitchen)">
+            <input type="text" id="new-desc" placeholder="Task Description">
+            <select id="new-schedule">
+                <option value="Daily">Daily</option>
+                <option value="Sun">Sun</option>
+                <option value="Mon">Mon</option>
+                <option value="Tues">Tues</option>
+                <option value="Wed">Wed</option>
+                <option value="Thurs">Thurs</option>
+                <option value="Fri">Fri</option>
+                <option value="Sat">Sat</option>
+            </select>
+            <button class="action-btn green-btn" onclick="addNewTask()">+ Add Task</button>
+        </div>
+
         <div id="checklist-content">Loading tasks...</div>
     </div>
 
     <script src="script.js"></script>
 </body>
 </html>
-
