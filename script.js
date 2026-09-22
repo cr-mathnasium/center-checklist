@@ -13,9 +13,11 @@ async function fetchTasks(sheetName) {
         
         if (json.operatingDays) {
             operatingDays = json.operatingDays;
-            taskData = json.tasks;
-        } else {
+            taskData = json.tasks || [];
+        } else if (Array.isArray(json)) {
             taskData = json;
+        } else {
+            taskData = [];
         }
         
         renderChecklist();
@@ -24,11 +26,14 @@ async function fetchTasks(sheetName) {
     }
 }
 
+function getScheduleType(task) {
+    return task.ScheduleType || task["Schedule Type"] || "";
+}
+
 function renderChecklist() {
     const container = document.getElementById('checklist-content');
     container.innerHTML = "";
 
-    // Toggle Tab Control Panels
     const isMasterTab = currentTabName === 'Master Task List';
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
     document.getElementById('add-task-container').style.display = isMasterTab ? 'flex' : 'none';
@@ -44,12 +49,15 @@ function renderChecklist() {
     });
 
     allDays.forEach(day => {
-        // Filter tasks according to selected operating days or master schedule
-        const dayTasks = taskData.filter(t => t.Day === day || (isMasterTab && t.ScheduleType === day));
-        
-        let displayTasks = dayTasks;
+        let displayTasks = [];
+
         if (isMasterTab) {
-            displayTasks = taskData.filter(t => t.ScheduleType === day || t.ScheduleType === 'Daily');
+            displayTasks = taskData.filter(t => {
+                const st = getScheduleType(t);
+                return st === day || st === 'Daily';
+            });
+        } else {
+            displayTasks = taskData.filter(t => t.Day === day);
         }
 
         if (displayTasks.length === 0 && currentTabName !== 'Next Week' && !isMasterTab) return;
@@ -60,7 +68,7 @@ function renderChecklist() {
 
         const header = document.createElement('div');
         header.className = "day-header";
-        header.innerHTML = `<span>${day} Tasks ${!operatingDays.includes(day) ? '(Non-Operating)' : ''}</span>`;
+        header.innerHTML = `<span>${day} Tasks ${!operatingDays.includes(day) && !isMasterTab ? '(Non-Operating)' : ''}</span>`;
 
         if (currentTabName === "Next Week") {
             const grayBtn = document.createElement('button');
@@ -75,13 +83,13 @@ function renderChecklist() {
         taskListContainer.dataset.day = day;
 
         displayTasks.forEach(task => {
-            let isDaily = isMasterTab ? (task.ScheduleType === 'Daily') : (taskCounts[task["Task Description"]] > 1);
+            const schedType = getScheduleType(task);
+            let isDaily = isMasterTab ? (schedType === 'Daily') : (taskCounts[task["Task Description"]] > 1);
             
             const row = document.createElement('div');
             row.className = `task-row ${isDaily ? 'is-daily' : 'is-weekly'}` + (currentTabName === "Next Week" ? " draggable" : "");
 
             if (isMasterTab) {
-                // Master / Default Week Editable Controls
                 row.innerHTML = `
                     <div>
                         <input type="text" class="edit-input" value="${task.Section || ''}" onblur="updateMasterTask(${task.rowNum}, 1, this.value)">
@@ -92,8 +100,8 @@ function renderChecklist() {
                     </div>
                     <div>
                         <select class="edit-select" onchange="updateMasterTask(${task.rowNum}, 3, this.value)">
-                            <option value="Daily" ${task.ScheduleType === 'Daily' ? 'selected' : ''}>Daily</option>
-                            ${allDays.map(d => `<option value="${d}" ${task.ScheduleType === d ? 'selected' : ''}>${d}</option>`).join('')}
+                            <option value="Daily" ${schedType === 'Daily' ? 'selected' : ''}>Daily</option>
+                            ${allDays.map(d => `<option value="${d}" ${schedType === d ? 'selected' : ''}>${d}</option>`).join('')}
                         </select>
                     </div>
                     <div>
@@ -101,11 +109,10 @@ function renderChecklist() {
                     </div>
                 `;
             } else {
-                // Regular Operational Layout
                 const isChecked = task["Done?"] === true || task["Done?"] === "TRUE";
                 row.innerHTML = `
                     <div>
-                        <div class="task-section-label">${task.Section || task.ScheduleType || ''}</div>
+                        <div class="task-section-label">${task.Section || schedType || ''}</div>
                         <span class="task-type-badge ${isDaily ? 'badge-daily' : 'badge-weekly'}">
                             ${isDaily ? 'Daily' : 'Weekly'}
                         </span>
