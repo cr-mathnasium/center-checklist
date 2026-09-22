@@ -11,23 +11,27 @@ async function fetchTasks(sheetName) {
         const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheetName)}`);
         const json = await response.json();
         
-        if (json.operatingDays) {
+        // Handle both direct array responses and wrapped responses cleanly
+        if (json && json.operatingDays) {
             operatingDays = json.operatingDays;
-            taskData = json.tasks || [];
+            taskData = Array.isArray(json.tasks) ? json.tasks : [];
         } else if (Array.isArray(json)) {
             taskData = json;
+        } else if (json && Array.isArray(json.tasks)) {
+            taskData = json.tasks;
         } else {
             taskData = [];
         }
         
         renderChecklist();
     } catch (error) {
-        document.getElementById('checklist-content').innerHTML = "Error loading data. Verify deployment setup.";
+        console.error("Fetch Error:", error);
+        document.getElementById('checklist-content').innerHTML = "Error loading data. Verify deployment setup or run setup script.";
     }
 }
 
 function getScheduleType(task) {
-    return task.ScheduleType || task["Schedule Type"] || "";
+    return task.ScheduleType || task["Schedule Type"] || task["ScheduleType"] || "";
 }
 
 function renderChecklist() {
@@ -47,6 +51,11 @@ function renderChecklist() {
         const desc = t["Task Description"];
         if (desc) taskCounts[desc] = (taskCounts[desc] || 0) + 1;
     });
+
+    if (isMasterTab && taskData.length === 0) {
+        container.innerHTML = "<div style='padding: 20px; text-align: center;'>No tasks found in Default Week. Run <code>setupCleaningDatabase()</code> in Google Apps Script or add a task above.</div>";
+        return;
+    }
 
     allDays.forEach(day => {
         let displayTasks = [];
