@@ -20,6 +20,16 @@ function renderChecklist() {
 
     const days = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
     
+    // Build a lookup map counting task occurrences across all days
+    // Daily tasks repeat across multiple days; Weekly tasks only occur on 1 day
+    const taskCounts = {};
+    taskData.forEach(t => {
+        const desc = t["Task Description"];
+        if (desc) {
+            taskCounts[desc] = (taskCounts[desc] || 0) + 1;
+        }
+    });
+
     days.forEach(day => {
         const dayTasks = taskData.filter(t => t.Day === day || (currentTabName === 'Master Task List' && t.ScheduleType === day));
         
@@ -65,7 +75,15 @@ function renderChecklist() {
         }
 
         displayTasks.forEach(task => {
-            const isDaily = task.ScheduleType === 'Daily' || (!task.ScheduleType && task.Section !== 'Office' && task.Section !== 'Doors' && task.Section !== 'Dusting' && task.Section !== 'Inventory' && task.Section !== 'Prize Cabinet' && task.Section !== 'Cubbies');
+            // Determine if task is Daily vs Weekly accurately:
+            let isDaily = false;
+            if (currentTabName === 'Master Task List') {
+                isDaily = task.ScheduleType === 'Daily';
+            } else {
+                // If the same task exists on 2 or more days, it is a Daily task
+                const desc = task["Task Description"];
+                isDaily = taskCounts[desc] > 1;
+            }
             
             const row = document.createElement('div');
             row.className = `task-row ${isDaily ? 'is-daily' : 'is-weekly'}` + (currentTabName === "Next Week" ? " draggable" : "");
