@@ -58,7 +58,7 @@ body {
     border-left: 5px solid #e74c3c; 
 }
 
-/* Control Bars (Default Week Settings & Add Task) */
+/* Control Bars */
 .days-selector-bar, .add-task-bar {
     background-color: #f8f9fa;
     border: 1px solid #e2e8f0;
@@ -128,7 +128,7 @@ body {
 /* Task Row Layout */
 .task-row { 
     display: grid; 
-    grid-template-columns: 180px 1fr 120px 100px; 
+    grid-template-columns: 180px 1fr 140px 100px; 
     gap: 15px;
     padding: 12px 20px; 
     border-bottom: 1px solid #eee; 
@@ -191,13 +191,18 @@ body {
     text-align: center; 
 }
 
-.edit-input, .edit-select {
-    width: 95%;
+.day-select, .edit-input, .edit-select {
     padding: 6px 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 14px;
     box-sizing: border-box;
+}
+
+.day-select {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #2c3e50;
 }
 
 /* Action Buttons */
@@ -218,13 +223,46 @@ body {
 .action-btn.danger-btn { background-color: #e74c3c; padding: 5px 10px; font-size: 12px; }
 .action-btn.danger-btn:hover { background-color: #c0392b; }
 
-/* Drag and Drop Elements */
-.draggable { 
-    cursor: grab; 
+/* Master Task Table */
+.master-table-container {
+    overflow-x: auto;
+    margin-top: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
 }
 
-.draggable:active { 
-    cursor: grabbing; 
+.master-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    font-size: 14px;
+}
+
+.master-table th {
+    background-color: #34495e;
+    color: white;
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: bold;
+}
+
+.master-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.master-table tr.row-daily td {
+    border-left: 4px solid #3498db;
+}
+
+.master-table tr.row-weekly td {
+    border-left: 4px solid #e67e22;
+    background-color: #fffdf9;
+}
+
+.master-table tr:hover {
+    background-color: #f8f9fa;
 }
 
 .dropzone { 
