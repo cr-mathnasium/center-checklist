@@ -268,3 +268,13 @@ body {
 .dropzone { 
     min-height: 50px; 
 }
+
+/* Hide tasks inside grayed out / deactivated days in Next Week */
+.day-section.hidden-day .dropzone {
+    display: none;
+}
+
+.day-section.hidden-day {
+    opacity: 0.5;
+    background-color: #f2f4f4;
+}
