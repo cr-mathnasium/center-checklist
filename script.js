@@ -2,12 +2,22 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzH3Nv579kC_f5w-YXXYmOi
 
 let currentTabName = "Current Week";
 let taskData = [];
+let operatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
+const allDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
 
 async function fetchTasks(sheetName) {
     document.getElementById('checklist-content').innerHTML = "Loading tasks from center database...";
     try {
         const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheetName)}`);
-        taskData = await response.json();
+        const json = await response.json();
+        
+        if (json.operatingDays) {
+            operatingDays = json.operatingDays;
+            taskData = json.tasks;
+        } else {
+            taskData = json;
+        }
+        
         renderChecklist();
     } catch (error) {
         document.getElementById('checklist-content').innerHTML = "Error loading data. Verify deployment setup.";
@@ -18,35 +28,39 @@ function renderChecklist() {
     const container = document.getElementById('checklist-content');
     container.innerHTML = "";
 
-    const days = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
-    
-    // Build a lookup map counting task occurrences across all days
-    // Daily tasks repeat across multiple days; Weekly tasks only occur on 1 day
+    // Toggle Tab Control Panels
+    const isMasterTab = currentTabName === 'Master Task List';
+    document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
+    document.getElementById('add-task-container').style.display = isMasterTab ? 'flex' : 'none';
+
+    if (isMasterTab) {
+        renderDayCheckboxes();
+    }
+
     const taskCounts = {};
     taskData.forEach(t => {
         const desc = t["Task Description"];
-        if (desc) {
-            taskCounts[desc] = (taskCounts[desc] || 0) + 1;
-        }
+        if (desc) taskCounts[desc] = (taskCounts[desc] || 0) + 1;
     });
 
-    days.forEach(day => {
-        const dayTasks = taskData.filter(t => t.Day === day || (currentTabName === 'Master Task List' && t.ScheduleType === day));
+    allDays.forEach(day => {
+        // Filter tasks according to selected operating days or master schedule
+        const dayTasks = taskData.filter(t => t.Day === day || (isMasterTab && t.ScheduleType === day));
         
         let displayTasks = dayTasks;
-        if (currentTabName === 'Master Task List') {
-            displayTasks = taskData.filter(t => t.ScheduleType === day || (t.ScheduleType === 'Daily'));
+        if (isMasterTab) {
+            displayTasks = taskData.filter(t => t.ScheduleType === day || t.ScheduleType === 'Daily');
         }
 
-        if (displayTasks.length === 0 && currentTabName !== 'Next Week') return;
+        if (displayTasks.length === 0 && currentTabName !== 'Next Week' && !isMasterTab) return;
 
         const daySection = document.createElement('div');
-        daySection.className = "day-section";
+        daySection.className = "day-section" + (!operatingDays.includes(day) && !isMasterTab ? " grayed-out" : "");
         daySection.id = `section-${day}`;
 
         const header = document.createElement('div');
         header.className = "day-header";
-        header.innerHTML = `<span>${day} Tasks</span>`;
+        header.innerHTML = `<span>${day} Tasks ${!operatingDays.includes(day) ? '(Non-Operating)' : ''}</span>`;
 
         if (currentTabName === "Next Week") {
             const grayBtn = document.createElement('button');
@@ -60,60 +74,56 @@ function renderChecklist() {
         taskListContainer.className = "dropzone";
         taskListContainer.dataset.day = day;
 
-        if (currentTabName === "Next Week") {
-            taskListContainer.ondragover = (e) => e.preventDefault();
-            taskListContainer.ondrop = (e) => {
-                e.preventDefault();
-                const rowNum = e.dataTransfer.getData("text/plain");
-                const item = taskData.find(t => t.rowNum == rowNum);
-                if (item) {
-                    item.Day = day;
-                    updateCellOnSheet(item.rowNum, 1, day, "Next Week");
-                    renderChecklist();
-                }
-            };
-        }
-
         displayTasks.forEach(task => {
-            // Determine if task is Daily vs Weekly accurately:
-            let isDaily = false;
-            if (currentTabName === 'Master Task List') {
-                isDaily = task.ScheduleType === 'Daily';
-            } else {
-                // If the same task exists on 2 or more days, it is a Daily task
-                const desc = task["Task Description"];
-                isDaily = taskCounts[desc] > 1;
-            }
+            let isDaily = isMasterTab ? (task.ScheduleType === 'Daily') : (taskCounts[task["Task Description"]] > 1);
             
             const row = document.createElement('div');
             row.className = `task-row ${isDaily ? 'is-daily' : 'is-weekly'}` + (currentTabName === "Next Week" ? " draggable" : "");
-            
-            if (currentTabName === "Next Week") {
-                row.draggable = true;
-                row.ondragstart = (e) => e.dataTransfer.setData("text/plain", task.rowNum);
+
+            if (isMasterTab) {
+                // Master / Default Week Editable Controls
+                row.innerHTML = `
+                    <div>
+                        <input type="text" class="edit-input" value="${task.Section || ''}" onblur="updateMasterTask(${task.rowNum}, 1, this.value)">
+                        <span class="task-type-badge ${isDaily ? 'badge-daily' : 'badge-weekly'}">${isDaily ? 'Daily' : 'Weekly'}</span>
+                    </div>
+                    <div>
+                        <input type="text" class="edit-input" style="width: 90%;" value="${task["Task Description"] || ''}" onblur="updateMasterTask(${task.rowNum}, 2, this.value)">
+                    </div>
+                    <div>
+                        <select class="edit-select" onchange="updateMasterTask(${task.rowNum}, 3, this.value)">
+                            <option value="Daily" ${task.ScheduleType === 'Daily' ? 'selected' : ''}>Daily</option>
+                            ${allDays.map(d => `<option value="${d}" ${task.ScheduleType === d ? 'selected' : ''}>${d}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <button class="action-btn danger-btn" onclick="deleteMasterTask(${task.rowNum})">Delete</button>
+                    </div>
+                `;
+            } else {
+                // Regular Operational Layout
+                const isChecked = task["Done?"] === true || task["Done?"] === "TRUE";
+                row.innerHTML = `
+                    <div>
+                        <div class="task-section-label">${task.Section || task.ScheduleType || ''}</div>
+                        <span class="task-type-badge ${isDaily ? 'badge-daily' : 'badge-weekly'}">
+                            ${isDaily ? 'Daily' : 'Weekly'}
+                        </span>
+                    </div>
+                    <div class="task-desc">${task["Task Description"] || ''}</div>
+                    <div>
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} 
+                               ${(currentTabName === 'Archive Log') ? 'disabled' : ''}
+                               onchange="toggleCheck(${task.rowNum}, this.checked)">
+                    </div>
+                    <div>
+                        <input type="text" class="initials-input" value="${task.Initials || ''}" placeholder="Initials"
+                               ${(currentTabName === 'Archive Log') ? 'disabled' : ''}
+                               onblur="updateInitials(${task.rowNum}, this.value)">
+                    </div>
+                `;
             }
 
-            const isChecked = task["Done?"] === true || task["Done?"] === "TRUE";
-            
-            row.innerHTML = `
-                <div>
-                    <div class="task-section-label">${task.Section || task.ScheduleType || ''}</div>
-                    <span class="task-type-badge ${isDaily ? 'badge-daily' : 'badge-weekly'}">
-                        ${isDaily ? 'Daily' : 'Weekly'}
-                    </span>
-                </div>
-                <div class="task-desc">${task["Task Description"] || ''}</div>
-                <div>
-                    <input type="checkbox" ${isChecked ? 'checked' : ''} 
-                           ${(currentTabName === 'Archive Log' || currentTabName === 'Master Task List') ? 'disabled' : ''}
-                           onchange="toggleCheck(${task.rowNum}, this.checked)">
-                </div>
-                <div>
-                    <input type="text" class="initials-input" value="${task.Initials || ''}" placeholder="Initials"
-                           ${(currentTabName === 'Archive Log' || currentTabName === 'Master Task List') ? 'disabled' : ''}
-                           onblur="updateInitials(${task.rowNum}, this.value)">
-                </div>
-            `;
             taskListContainer.appendChild(row);
         });
 
@@ -121,6 +131,63 @@ function renderChecklist() {
         daySection.appendChild(taskListContainer);
         container.appendChild(daySection);
     });
+}
+
+function renderDayCheckboxes() {
+    const boxContainer = document.getElementById('day-checkboxes');
+    boxContainer.innerHTML = allDays.map(d => `
+        <label>
+            <input type="checkbox" value="${d}" ${operatingDays.includes(d) ? 'checked' : ''}> ${d}
+        </label>
+    `).join('');
+}
+
+async function saveOperatingDays() {
+    const checked = Array.from(document.querySelectorAll('#day-checkboxes input:checked')).map(cb => cb.value);
+    operatingDays = checked;
+    await fetch(API_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveOperatingDays", days: checked })
+    });
+    alert("Operating days updated!");
+    renderChecklist();
+}
+
+async function updateMasterTask(rowNum, colNum, value) {
+    await updateCellOnSheet(rowNum, colNum, value, "Master Task List");
+}
+
+async function addNewTask() {
+    const section = document.getElementById('new-section').value;
+    const desc = document.getElementById('new-desc').value;
+    const schedule = document.getElementById('new-schedule').value;
+    
+    if (!desc) { alert("Please enter a task description."); return; }
+    
+    await fetch(API_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "addTask", section, desc, schedule })
+    });
+    
+    document.getElementById('new-section').value = "";
+    document.getElementById('new-desc').value = "";
+    fetchTasks("Master Task List");
+}
+
+async function deleteMasterTask(rowNum) {
+    if (confirm("Delete this task from Default Week?")) {
+        await fetch(API_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "deleteTask", rowNum })
+        });
+        fetchTasks("Master Task List");
+    }
 }
 
 async function toggleCheck(rowNum, isChecked) {
