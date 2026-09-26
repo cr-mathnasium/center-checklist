@@ -41,7 +41,21 @@ function renderChecklist() {
     const isNextWeekTab = currentTabName === 'Next Week';
     
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
-    document.getElementById('add-task-container').style.display = isMasterTab ? 'flex' : 'none';
+    document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab) ? 'flex' : 'none';
+
+    // Adjust schedule dropdown option for Master vs Next Week
+    const scheduleSelect = document.getElementById('new-schedule');
+    if (scheduleSelect) {
+        const hasDailyOption = Array.from(scheduleSelect.options).some(o => o.value === "Daily");
+        if (isMasterTab && !hasDailyOption) {
+            const dailyOpt = document.createElement('option');
+            dailyOpt.value = "Daily";
+            dailyOpt.innerText = "Daily";
+            scheduleSelect.insertBefore(dailyOpt, scheduleSelect.firstChild);
+        } else if (isNextWeekTab && hasDailyOption) {
+            scheduleSelect.removeChild(scheduleSelect.querySelector('option[value="Daily"]'));
+        }
+    }
 
     if (isMasterTab) {
         renderDayCheckboxes();
@@ -60,7 +74,6 @@ function renderChecklist() {
 
         if (dayTasks.length === 0 && !isNextWeekTab) return;
 
-        // Next Week checks nextWeekOperatingDays; Current Week shows all present tasks
         const isDayActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
 
         const daySection = document.createElement('div');
@@ -256,16 +269,24 @@ async function addNewTask() {
     
     if (!desc) { alert("Please enter a task description."); return; }
     
+    const targetSheet = (currentTabName === 'Next Week') ? "Next Week" : "Master Task List";
+
     await fetch(API_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "addTask", section, desc, schedule })
+        body: JSON.stringify({ 
+            action: "addTask", 
+            section: section, 
+            desc: desc, 
+            schedule: schedule,
+            sheet: targetSheet
+        })
     });
     
     document.getElementById('new-section').value = "";
     document.getElementById('new-desc').value = "";
-    fetchTasks("Master Task List");
+    fetchTasks(targetSheet);
 }
 
 async function deleteMasterTask(rowNum) {
