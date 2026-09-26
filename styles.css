@@ -11,7 +11,7 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* Fits screen without outer scrollbar */
+    overflow: hidden;
 }
 
 /* Navbar */
@@ -83,6 +83,21 @@ body {
 }
 
 /* Control Bars */
+.rotate-week-bar {
+    background-color: #fefce8;
+    border: 1px solid #fef08a;
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #854d0e;
+    flex-shrink: 0;
+}
+
 .days-selector-bar, .add-task-bar {
     background-color: #f8f9fa;
     border: 1px solid #e2e8f0;
@@ -115,7 +130,7 @@ body {
     min-width: 120px;
 }
 
-/* Grid Matrix Container */
+/* Matrix Table Styling */
 #checklist-content {
     flex: 1;
     overflow-y: auto;
@@ -123,7 +138,6 @@ body {
     border-radius: 4px;
 }
 
-/* Matrix Table Styling */
 .matrix-table {
     width: 100%;
     border-collapse: collapse;
@@ -214,6 +228,8 @@ body {
 .action-btn:hover { background-color: #2980b9; }
 .action-btn.green-btn { background-color: #2ecc71; }
 .action-btn.green-btn:hover { background-color: #27ae60; }
+.action-btn.rotate-btn { background-color: #eab308; color: #422006; border: 1px solid #ca8a04; }
+.action-btn.rotate-btn:hover { background-color: #ca8a04; color: #fff; }
 .action-btn.danger-btn { background-color: #e74c3c; padding: 2px 6px; font-size: 10px; }
 .action-btn.danger-btn:hover { background-color: #c0392b; }
 
@@ -234,37 +250,4 @@ body {
     border-radius: 3px;
     font-size: 10px;
     background: #fff;
-}
-
-/* Rotate Week Control Bar */
-.rotate-week-bar {
-    background-color: #fefce8;
-    border: 1px solid #fef08a;
-    padding: 8px 14px;
-    border-radius: 4px;
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 13px;
-    font-weight: 600;
-    color: #854d0e;
-    flex-shrink: 0;
-}
-
-.action-btn.rotate-btn {
-    background-color: #eab308;
-    color: #422006;
-    border: 1px solid #ca8a04;
-    padding: 6px 14px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 12px;
-    transition: 0.2s;
-}
-
-.action-btn.rotate-btn:hover {
-    background-color: #ca8a04;
-    color: #ffffff;
 }
