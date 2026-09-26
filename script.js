@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzXQx2NRvUtoqqxz3Brx0PLQLPQXmlmLQR2Q6SP_byM-rgkZ2aavn_QPd2R5ivtxyFy4A/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbzvM_pS8wcU5ViZnu-mMfsO4656FCU_5-PtEb9BeV3gxS0vXB45GxFMb2tBjzIejcO8aw/exec"; 
 
 let currentTabName = "Current Week";
 let taskData = [];
@@ -43,6 +43,7 @@ function renderChecklist() {
     
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
     document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab) ? 'flex' : 'none';
+    document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
 
     if (isMasterTab) {
         renderDayCheckboxes();
@@ -50,14 +51,12 @@ function renderChecklist() {
         return;
     }
 
-    // Separate Daily Tasks from Weekly Scheduled Tasks
     const taskCounts = {};
     taskData.forEach(t => {
         const desc = t["Task Description"];
         if (desc) taskCounts[desc] = (taskCounts[desc] || 0) + 1;
     });
 
-    // Extract unique daily and weekly items
     const dailyMap = new Map();
     const weeklyTasks = [];
 
@@ -75,7 +74,6 @@ function renderChecklist() {
     const table = document.createElement('table');
     table.className = "matrix-table";
 
-    // Build Header Row
     let headerHtml = `
         <thead>
             <tr>
@@ -99,7 +97,6 @@ function renderChecklist() {
 
     let bodyHtml = `<tbody>`;
 
-    // 1. Render Daily Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Daily Core Tasks</td>
@@ -112,7 +109,6 @@ function renderChecklist() {
         
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
-            // Find specific task entry for this day
             const dayEntry = taskData.find(t => t["Task Description"] === desc && t.Day === day);
 
             if (!dayEntry || !isActive) {
@@ -134,7 +130,6 @@ function renderChecklist() {
         bodyHtml += `</tr>`;
     });
 
-    // 2. Render Weekly Scheduled Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
@@ -182,6 +177,31 @@ function renderChecklist() {
     bodyHtml += `</tbody>`;
     table.innerHTML = headerHtml + bodyHtml;
     container.appendChild(table);
+}
+
+async function triggerWeekRotation() {
+    const confirm1 = confirm("Are you sure you want to rotate the weeks?\n\nThis will:\n1. Move completed 'This Week' tasks into 'Last Week' (Archive).\n2. Promote 'Next Week' into 'This Week'.\n3. Reset 'Next Week' from Default Week.");
+    if (!confirm1) return;
+
+    const confirm2 = confirm("FINAL CONFIRMATION:\n\nAre you completely sure? This action will overwrite the current active week and cannot be undone.");
+    if (!confirm2) return;
+
+    document.getElementById('checklist-content').innerHTML = "<div style='padding:20px;text-align:center;'>Rotating week and updating database...</div>";
+
+    try {
+        await fetch(API_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "rotateWeek" })
+        });
+        
+        alert("Week successfully rotated! Loading new Current Week...");
+        switchTab('Current Week', document.querySelectorAll('.nav-btn')[0]);
+    } catch (error) {
+        alert("Error performing rotation. Check deployment settings.");
+        fetchTasks("Next Week");
+    }
 }
 
 async function toggleNextWeekDay(day) {
@@ -354,54 +374,3 @@ function switchTab(tabName, btnElement) {
 }
 
 fetchTasks("Current Week");
-
-// Toggle Rotate Week bar visibility inside renderChecklist()
-function renderChecklist() {
-    const container = document.getElementById('checklist-content');
-    container.innerHTML = "";
-
-    const isMasterTab = currentTabName === 'Master Task List';
-    const isNextWeekTab = currentTabName === 'Next Week';
-    const isArchiveTab = currentTabName === 'Archive Log';
-    
-    document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
-    document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab) ? 'flex' : 'none';
-    document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
-
-    if (isMasterTab) {
-        renderDayCheckboxes();
-        renderMasterTaskTable(container);
-        return;
-    }
-
-    // [Rest of renderChecklist logic remains identical]
-    renderMatrixView(container, isNextWeekTab, isArchiveTab);
-}
-
-// Function to handle double-confirmation rotation
-async function triggerWeekRotation() {
-    // Confirmation 1
-    const confirm1 = confirm("Are you sure you want to rotate the weeks?\n\nThis will:\n1. Move completed 'This Week' tasks into 'Last Week' (Archive).\n2. Promote 'Next Week' into 'This Week'.\n3. Reset 'Next Week' from Default Week.");
-    if (!confirm1) return;
-
-    // Confirmation 2
-    const confirm2 = confirm("FINAL CONFIRMATION:\n\nAre you completely sure? This action will overwrite the current active week and cannot be undone.");
-    if (!confirm2) return;
-
-    document.getElementById('checklist-content').innerHTML = "<div style='padding:20px;text-align:center;'>Rotating week and updating database...</div>";
-
-    try {
-        await fetch(API_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "rotateWeek" })
-        });
-        
-        alert("Week successfully rotated! Loading new Current Week...");
-        switchTab('Current Week', document.querySelectorAll('.nav-btn')[0]);
-    } catch (error) {
-        alert("Error performing rotation. Check deployment settings.");
-        fetchTasks("Next Week");
-    }
-}
