@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzvM_pS8wcU5ViZnu-mMfsO4656FCU_5-PtEb9BeV3gxS0vXB45GxFMb2tBjzIejcO8aw/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbzvM_pS8wcU5ViZnu-mMfsO4656FCU_5-PtEb9BeV3gxS0vXB45GxFMb2tBjzIejcO8aw/exec";
 
 let currentTabName = "Current Week";
 let taskData = [];
@@ -85,7 +85,7 @@ function renderChecklist() {
         headerHtml += `
             <th class="day-col-head ${!isActive ? 'grayed-out' : ''}">
                 ${day}
-                ${isNextWeekTab ? `<br><button class="gray-btn" onclick="toggleNextWeekDay('${day}')">${isActive ? 'Gray' : 'On'}</button>` : ''}
+                ${isNextWeekTab ? `<br><button class="gray-btn" onclick="toggleNextWeekDay('${day}')">${isActive ? 'Off' : 'On'}</button>` : ''}
             </th>
         `;
     });
@@ -119,10 +119,12 @@ function renderChecklist() {
                 const isChecked = dayEntry["Done?"] === true || dayEntry["Done?"] === "TRUE";
                 bodyHtml += `
                     <td class="day-cell">
-                        <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
-                               onchange="toggleCheck(${dayEntry.rowNum}, this.checked)">
-                        <input type="text" class="cell-initials" value="${dayEntry.Initials || ''}" placeholder="Init" ${isArchiveTab ? 'disabled' : ''}
-                               onblur="updateInitials(${dayEntry.rowNum}, this.value)">
+                        <div class="compact-cell-content">
+                            <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
+                                   onchange="toggleCheck(${dayEntry.rowNum}, this.checked)">
+                            <input type="text" class="cell-initials" value="${dayEntry.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
+                                   onblur="updateInitials(${dayEntry.rowNum}, this.value)">
+                        </div>
                     </td>
                 `;
             }
@@ -136,7 +138,7 @@ function renderChecklist() {
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
-            <td>Specific Scheduled Day Tasks ${isNextWeekTab ? '(Drag & Drop to reassign days)' : ''}</td>
+            <td>Specific Scheduled Day Tasks ${isNextWeekTab ? '(Drag cell to reassign day)' : ''}</td>
         </tr>
     `;
 
@@ -147,7 +149,6 @@ function renderChecklist() {
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
 
-            // Make every cell in Next Week a valid Drop Zone
             const dropAttributes = isNextWeekTab ? `
                 ondragover="event.preventDefault(); this.classList.add('drag-over');" 
                 ondragleave="this.classList.remove('drag-over');"
@@ -165,11 +166,13 @@ function renderChecklist() {
 
                 bodyHtml += `
                     <td ${dragAttributes} ${dropAttributes}>
-                        ${isNextWeekTab ? '<span class="drag-handle" title="Drag to move day">⋮⋮</span>' : ''}
-                        <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
-                               onchange="toggleCheck(${task.rowNum}, this.checked)">
-                        <input type="text" class="cell-initials" value="${task.Initials || ''}" placeholder="Init" ${isArchiveTab ? 'disabled' : ''}
-                               onblur="updateInitials(${task.rowNum}, this.value)">
+                        <div class="compact-cell-content">
+                            ${isNextWeekTab ? '<span class="drag-handle" title="Drag to move day">⋮</span>' : ''}
+                            <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
+                                   onchange="toggleCheck(${task.rowNum}, this.checked)">
+                            <input type="text" class="cell-initials" value="${task.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
+                                   onblur="updateInitials(${task.rowNum}, this.value)">
+                        </div>
                     </td>
                 `;
             } else {
@@ -186,7 +189,6 @@ function renderChecklist() {
     container.appendChild(table);
 }
 
-// Drag & Drop Handlers for Next Week Matrix
 function handleTaskDragStart(event, rowNum) {
     event.dataTransfer.setData("text/plain", rowNum);
     event.dataTransfer.effectAllowed = "move";
@@ -370,6 +372,10 @@ async function toggleCheck(rowNum, isChecked) {
 }
 
 async function updateInitials(rowNum, initials) {
+    // Auto check if initials entered
+    if (initials && initials.trim().length > 0) {
+        updateCellOnSheet(rowNum, 4, "TRUE", currentTabName);
+    }
     updateCellOnSheet(rowNum, 5, initials, currentTabName);
 }
 
