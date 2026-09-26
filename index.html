@@ -21,14 +21,20 @@
             <div class="reminder">REMINDER: Report Behavior issues to CD right away. Especially if disruptive, distracting, or disrespectful.</div>
         </div>
 
-        <!-- Operating Days Selector (Default Week) -->
+        <!-- Rotate Week Trigger Bar (Visible on Next Week Tab) -->
+        <div id="rotate-week-container" class="rotate-week-bar" style="display: none;">
+            <span>Ready to complete the current week?</span>
+            <button class="action-btn rotate-btn" onclick="triggerWeekRotation()">🔄 Promote Next Week to Current Week & Archive</button>
+        </div>
+
+        <!-- Operating Days Selector (Default Week Tab) -->
         <div id="days-selector-container" class="days-selector-bar" style="display: none;">
             <strong>Default Operating Days:</strong>
             <div id="day-checkboxes"></div>
             <button class="action-btn" onclick="saveOperatingDays()">Save Operating Days</button>
         </div>
 
-        <!-- Add Task Bar (Default Week & Next Week) -->
+        <!-- Add Task Bar (Default Week & Next Week Tabs) -->
         <div id="add-task-container" class="add-task-bar" style="display: none;">
             <input type="text" id="new-section" placeholder="Section (e.g. Kitchen)">
             <input type="text" id="new-desc" placeholder="Task Description">
