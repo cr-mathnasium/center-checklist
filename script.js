@@ -74,6 +74,7 @@ function renderChecklist() {
     const table = document.createElement('table');
     table.className = "matrix-table";
 
+    // Build Table Header
     let headerHtml = `
         <thead>
             <tr>
@@ -97,6 +98,7 @@ function renderChecklist() {
 
     let bodyHtml = `<tbody>`;
 
+    // 1. Daily Core Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Daily Core Tasks</td>
@@ -130,10 +132,11 @@ function renderChecklist() {
         bodyHtml += `</tr>`;
     });
 
+    // 2. Weekly Scheduled Tasks Section (with Drag & Drop Matrix Cells)
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
-            <td>Specific Scheduled Day Tasks</td>
+            <td>Specific Scheduled Day Tasks ${isNextWeekTab ? '(Drag & Drop to reassign days)' : ''}</td>
         </tr>
     `;
 
@@ -144,21 +147,25 @@ function renderChecklist() {
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
 
+            // Make every cell in Next Week a valid Drop Zone
+            const dropAttributes = isNextWeekTab ? `
+                ondragover="event.preventDefault(); this.classList.add('drag-over');" 
+                ondragleave="this.classList.remove('drag-over');"
+                ondrop="handleTaskDrop(event, ${task.rowNum}, '${day}')"
+            ` : '';
+
             if (day === taskDay && isActive) {
                 const isChecked = task["Done?"] === true || task["Done?"] === "TRUE";
                 
-                let reassignHtml = "";
-                if (isNextWeekTab) {
-                    reassignHtml = `
-                        <select class="day-select-inline" onchange="reassignTaskDay(${task.rowNum}, this.value)">
-                            ${allDays.map(d => `<option value="${d}" ${d === day ? 'selected' : ''}>${d}</option>`).join('')}
-                        </select>
-                    `;
-                }
+                const dragAttributes = isNextWeekTab ? `
+                    draggable="true" 
+                    ondragstart="handleTaskDragStart(event, ${task.rowNum})"
+                    class="day-cell active-weekly-cell draggable-cell"
+                ` : `class="day-cell active-weekly-cell"`;
 
                 bodyHtml += `
-                    <td class="day-cell" style="background-color: #fef5e7;">
-                        ${reassignHtml}
+                    <td ${dragAttributes} ${dropAttributes}>
+                        ${isNextWeekTab ? '<span class="drag-handle" title="Drag to move day">⋮⋮</span>' : ''}
                         <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
                                onchange="toggleCheck(${task.rowNum}, this.checked)">
                         <input type="text" class="cell-initials" value="${task.Initials || ''}" placeholder="Init" ${isArchiveTab ? 'disabled' : ''}
@@ -166,7 +173,7 @@ function renderChecklist() {
                     </td>
                 `;
             } else {
-                bodyHtml += `<td class="day-cell blocked-cell"></td>`;
+                bodyHtml += `<td class="day-cell blocked-cell" ${dropAttributes}></td>`;
             }
         });
 
@@ -177,6 +184,24 @@ function renderChecklist() {
     bodyHtml += `</tbody>`;
     table.innerHTML = headerHtml + bodyHtml;
     container.appendChild(table);
+}
+
+// Drag & Drop Handlers for Next Week Matrix
+function handleTaskDragStart(event, rowNum) {
+    event.dataTransfer.setData("text/plain", rowNum);
+    event.dataTransfer.effectAllowed = "move";
+}
+
+async function handleTaskDrop(event, rowNum, newDay) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over');
+    
+    const item = taskData.find(t => t.rowNum == rowNum);
+    if (item && item.Day !== newDay) {
+        item.Day = newDay;
+        await updateCellOnSheet(rowNum, 1, newDay, "Next Week");
+        renderChecklist();
+    }
 }
 
 async function triggerWeekRotation() {
@@ -217,15 +242,6 @@ async function toggleNextWeekDay(day) {
         body: JSON.stringify({ action: "saveNextWeekOperatingDays", days: nextWeekOperatingDays })
     });
     renderChecklist();
-}
-
-async function reassignTaskDay(rowNum, newDay) {
-    const item = taskData.find(t => t.rowNum == rowNum);
-    if (item) {
-        item.Day = newDay;
-        await updateCellOnSheet(rowNum, 1, newDay, "Next Week");
-        renderChecklist();
-    }
 }
 
 function renderMasterTaskTable(container) {
