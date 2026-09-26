@@ -251,3 +251,34 @@ body {
     font-size: 10px;
     background: #fff;
 }
+
+/* Active Weekly Cell Styling */
+.matrix-table td.day-cell.active-weekly-cell {
+    background-color: #fef5e7;
+    position: relative;
+}
+
+.matrix-table td.day-cell.draggable-cell {
+    cursor: grab;
+    user-select: none;
+}
+
+.matrix-table td.day-cell.draggable-cell:active {
+    cursor: grabbing;
+    background-color: #fde68a;
+}
+
+/* Drag Handle Icon */
+.drag-handle {
+    font-size: 10px;
+    color: #d97706;
+    margin-right: 2px;
+    cursor: grab;
+    font-weight: bold;
+}
+
+/* Cell Drop Highlight */
+.matrix-table td.day-cell.drag-over {
+    background-color: #dbeafe !important;
+    border: 2px dashed #2563eb !important;
+}
