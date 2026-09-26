@@ -235,3 +235,36 @@ body {
     font-size: 10px;
     background: #fff;
 }
+
+/* Rotate Week Control Bar */
+.rotate-week-bar {
+    background-color: #fefce8;
+    border: 1px solid #fef08a;
+    padding: 8px 14px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #854d0e;
+    flex-shrink: 0;
+}
+
+.action-btn.rotate-btn {
+    background-color: #eab308;
+    color: #422006;
+    border: 1px solid #ca8a04;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 12px;
+    transition: 0.2s;
+}
+
+.action-btn.rotate-btn:hover {
+    background-color: #ca8a04;
+    color: #ffffff;
+}
