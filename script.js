@@ -200,9 +200,16 @@ async function handleTaskDrop(event, rowNum, newDay) {
     
     const item = taskData.find(t => t.rowNum == rowNum);
     if (item && item.Day !== newDay) {
+        // 1. INSTANT OPTIMISTIC UPDATE (Update local memory & re-render screen immediately)
         item.Day = newDay;
-        await updateCellOnSheet(rowNum, 1, newDay, "Next Week");
-        renderChecklist();
+        renderChecklist(); 
+
+        // 2. BACKGROUND SYNC (Send update to Google Sheets quietly in the background)
+        try {
+            await updateCellOnSheet(rowNum, 1, newDay, "Next Week");
+        } catch (err) {
+            console.error("Background sync failed:", err);
+        }
     }
 }
 
