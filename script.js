@@ -6,6 +6,9 @@ let masterOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
 let nextWeekOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
 const allDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
 
+let isEditMode = false;
+let undoStack = []; // Stores last 5 actions
+
 async function fetchTasks(sheetName) {
     document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;text-align:center;'>Loading checklist matrix...</div>";
     try {
@@ -33,6 +36,53 @@ function getScheduleType(task) {
     return task.ScheduleType || task["Schedule Type"] || task["ScheduleType"] || "";
 }
 
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    const btn = document.getElementById('toggle-edit-btn');
+    if (isEditMode) {
+        btn.innerText = "✖ Exit Edit Mode";
+        btn.classList.add('active-mode');
+    } else {
+        btn.innerText = "✏️ Edit Mode";
+        btn.classList.remove('active-mode');
+    }
+    renderChecklist();
+}
+
+function pushUndoAction(actionObj) {
+    undoStack.push(actionObj);
+    if (undoStack.length > 5) undoStack.shift(); // Limit to 5
+    updateUndoButton();
+}
+
+function updateUndoButton() {
+    const btn = document.getElementById('undo-btn');
+    if (undoStack.length > 0) {
+        btn.style.display = "inline-block";
+        btn.innerText = `↩ Undo (${undoStack.length})`;
+    } else {
+        btn.style.display = "none";
+    }
+}
+
+async function undoLastAction() {
+    if (undoStack.length === 0) return;
+    const action = undoStack.pop();
+    updateUndoButton();
+
+    const item = taskData.find(t => t.rowNum == action.rowNum);
+
+    if (action.type === 'cell') {
+        if (item) item[action.field] = action.oldValue;
+        renderChecklist();
+        await updateCellOnSheet(action.rowNum, action.colNum, action.oldValue, action.sheet);
+    } else if (action.type === 'day') {
+        if (item) item.Day = action.oldDay;
+        renderChecklist();
+        await updateCellOnSheet(action.rowNum, 1, action.oldDay, action.sheet);
+    }
+}
+
 function renderChecklist() {
     const container = document.getElementById('checklist-content');
     container.innerHTML = "";
@@ -42,7 +92,7 @@ function renderChecklist() {
     const isArchiveTab = currentTabName === 'Archive Log';
     
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
-    document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab) ? 'flex' : 'none';
+    document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab || isEditMode) ? 'flex' : 'none';
     document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
 
     if (isMasterTab) {
@@ -74,7 +124,6 @@ function renderChecklist() {
     const table = document.createElement('table');
     table.className = "matrix-table";
 
-    // Build Table Header
     let headerHtml = `
         <thead>
             <tr>
@@ -98,7 +147,7 @@ function renderChecklist() {
 
     let bodyHtml = `<tbody>`;
 
-    // 1. Daily Core Tasks Section
+    // 1. Daily Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Daily Core Tasks</td>
@@ -117,24 +166,39 @@ function renderChecklist() {
                 bodyHtml += `<td class="day-cell grayed-out"></td>`;
             } else {
                 const isChecked = dayEntry["Done?"] === true || dayEntry["Done?"] === "TRUE";
-                bodyHtml += `
-                    <td class="day-cell">
-                        <div class="compact-cell-content">
-                            <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
-                                   onchange="toggleCheck(${dayEntry.rowNum}, this.checked)">
-                            <input type="text" class="cell-initials" value="${dayEntry.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
-                                   onblur="updateInitials(${dayEntry.rowNum}, this.value)">
-                        </div>
-                    </td>
-                `;
+                
+                if (isEditMode) {
+                    bodyHtml += `<td class="day-cell"><span style="color:#9ca3af;">—</span></td>`;
+                } else {
+                    bodyHtml += `
+                        <td class="day-cell">
+                            <div class="compact-cell-content">
+                                <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
+                                       onchange="handleAsyncCheck(${dayEntry.rowNum}, this.checked)">
+                                <input type="text" class="cell-initials" value="${dayEntry.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
+                                       onblur="handleAsyncInitials(${dayEntry.rowNum}, this.value)">
+                            </div>
+                        </td>
+                    `;
+                }
             }
         });
 
-        bodyHtml += `<td class="task-desc-cell"><strong>${masterTask.Section ? masterTask.Section + ': ' : ''}</strong>${desc}</td>`;
+        if (isEditMode && dailyMap.get(desc)) {
+            const rowItem = dailyMap.get(desc);
+            bodyHtml += `
+                <td class="task-desc-cell">
+                    <input type="text" class="edit-cell-input" value="${desc}" onblur="handleAsyncDescEdit(${rowItem.rowNum}, this.value)">
+                </td>
+            `;
+        } else {
+            bodyHtml += `<td class="task-desc-cell"><strong>${masterTask.Section ? masterTask.Section + ': ' : ''}</strong>${desc}</td>`;
+        }
+        
         bodyHtml += `</tr>`;
     });
 
-    // 2. Weekly Scheduled Tasks Section (with Drag & Drop Matrix Cells)
+    // 2. Weekly Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
@@ -164,29 +228,77 @@ function renderChecklist() {
                     class="day-cell active-weekly-cell draggable-cell"
                 ` : `class="day-cell active-weekly-cell"`;
 
-                bodyHtml += `
-                    <td ${dragAttributes} ${dropAttributes}>
-                        <div class="compact-cell-content">
-                            ${isNextWeekTab ? '<span class="drag-handle" title="Drag to move day">⋮</span>' : ''}
-                            <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
-                                   onchange="toggleCheck(${task.rowNum}, this.checked)">
-                            <input type="text" class="cell-initials" value="${task.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
-                                   onblur="updateInitials(${task.rowNum}, this.value)">
-                        </div>
-                    </td>
-                `;
+                if (isEditMode) {
+                    bodyHtml += `<td ${dragAttributes} ${dropAttributes}><span style="color:#9ca3af;">—</span></td>`;
+                } else {
+                    bodyHtml += `
+                        <td ${dragAttributes} ${dropAttributes}>
+                            <div class="compact-cell-content">
+                                ${isNextWeekTab ? '<span class="drag-handle" title="Drag to move day">⋮</span>' : ''}
+                                <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
+                                       onchange="handleAsyncCheck(${task.rowNum}, this.checked)">
+                                <input type="text" class="cell-initials" value="${task.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
+                                       onblur="handleAsyncInitials(${task.rowNum}, this.value)">
+                            </div>
+                        </td>
+                    `;
+                }
             } else {
                 bodyHtml += `<td class="day-cell blocked-cell" ${dropAttributes}></td>`;
             }
         });
 
-        bodyHtml += `<td class="task-desc-cell"><strong>${task.Section ? task.Section + ': ' : ''}</strong>${task["Task Description"]}</td>`;
+        if (isEditMode) {
+            bodyHtml += `
+                <td class="task-desc-cell">
+                    <input type="text" class="edit-cell-input" value="${task["Task Description"]}" onblur="handleAsyncDescEdit(${task.rowNum}, this.value)">
+                </td>
+            `;
+        } else {
+            bodyHtml += `<td class="task-desc-cell"><strong>${task.Section ? task.Section + ': ' : ''}</strong>${task["Task Description"]}</td>`;
+        }
+
         bodyHtml += `</tr>`;
     });
 
     bodyHtml += `</tbody>`;
     table.innerHTML = headerHtml + bodyHtml;
     container.appendChild(table);
+}
+
+// Global Optimistic Handlers
+async function handleAsyncCheck(rowNum, isChecked) {
+    const item = taskData.find(t => t.rowNum == rowNum);
+    if (item) {
+        pushUndoAction({ type: 'cell', rowNum, field: 'Done?', oldValue: item['Done?'], colNum: 4, sheet: currentTabName });
+        item['Done?'] = isChecked ? "TRUE" : "FALSE";
+        renderChecklist();
+        await updateCellOnSheet(rowNum, 4, isChecked ? "TRUE" : "FALSE", currentTabName);
+    }
+}
+
+async function handleAsyncInitials(rowNum, initials) {
+    const item = taskData.find(t => t.rowNum == rowNum);
+    if (item && item.Initials !== initials) {
+        pushUndoAction({ type: 'cell', rowNum, field: 'Initials', oldValue: item.Initials, colNum: 5, sheet: currentTabName });
+        item.Initials = initials;
+        if (initials && initials.trim().length > 0) {
+            item['Done?'] = "TRUE";
+            await updateCellOnSheet(rowNum, 4, "TRUE", currentTabName);
+        }
+        renderChecklist();
+        await updateCellOnSheet(rowNum, 5, initials, currentTabName);
+    }
+}
+
+async function handleAsyncDescEdit(rowNum, newDesc) {
+    const item = taskData.find(t => t.rowNum == rowNum);
+    if (item && item["Task Description"] !== newDesc) {
+        pushUndoAction({ type: 'cell', rowNum, field: 'Task Description', oldValue: item["Task Description"], colNum: 3, sheet: currentTabName });
+        item["Task Description"] = newDesc;
+        renderChecklist();
+        await updateCellOnSheet(rowNum, 3, newDesc, currentTabName);
+    }
 }
 
 function handleTaskDragStart(event, rowNum) {
@@ -200,16 +312,10 @@ async function handleTaskDrop(event, rowNum, newDay) {
     
     const item = taskData.find(t => t.rowNum == rowNum);
     if (item && item.Day !== newDay) {
-        // 1. INSTANT OPTIMISTIC UPDATE (Update local memory & re-render screen immediately)
+        pushUndoAction({ type: 'day', rowNum, oldDay: item.Day, sheet: "Next Week" });
         item.Day = newDay;
         renderChecklist(); 
-
-        // 2. BACKGROUND SYNC (Send update to Google Sheets quietly in the background)
-        try {
-            await updateCellOnSheet(rowNum, 1, newDay, "Next Week");
-        } catch (err) {
-            console.error("Background sync failed:", err);
-        }
+        await updateCellOnSheet(rowNum, 1, newDay, "Next Week");
     }
 }
 
@@ -342,7 +448,7 @@ async function addNewTask() {
     
     if (!desc) { alert("Please enter a task description."); return; }
     
-    const targetSheet = (currentTabName === 'Next Week') ? "Next Week" : "Master Task List";
+    const targetSheet = (currentTabName === 'Next Week') ? "Next Week" : (currentTabName === 'Current Week' ? "Current Week" : "Master Task List");
 
     await fetch(API_URL, {
         method: "POST",
@@ -374,18 +480,6 @@ async function deleteMasterTask(rowNum) {
     }
 }
 
-async function toggleCheck(rowNum, isChecked) {
-    updateCellOnSheet(rowNum, 4, isChecked ? "TRUE" : "FALSE", currentTabName);
-}
-
-async function updateInitials(rowNum, initials) {
-    // Auto check if initials entered
-    if (initials && initials.trim().length > 0) {
-        updateCellOnSheet(rowNum, 4, "TRUE", currentTabName);
-    }
-    updateCellOnSheet(rowNum, 5, initials, currentTabName);
-}
-
 async function updateCellOnSheet(rowNum, colNum, value, sheet) {
     await fetch(API_URL, {
         method: "POST",
@@ -397,6 +491,8 @@ async function updateCellOnSheet(rowNum, colNum, value, sheet) {
 
 function switchTab(tabName, btnElement) {
     currentTabName = tabName;
+    undoStack = []; // Reset undo stack when switching tabs
+    updateUndoButton();
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
     fetchTasks(tabName);
