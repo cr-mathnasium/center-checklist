@@ -267,3 +267,10 @@ body {
     font-size: 8px;
     width: 100%;
 }
+
+.disabled-cell-dash {
+    color: #9ca3af;
+    font-size: 10px;
+    font-weight: bold;
+    user-select: none;
+}
