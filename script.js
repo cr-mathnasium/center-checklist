@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzvM_pS8wcU5ViZnu-mMfsO4656FCU_5-PtEb9BeV3gxS0vXB45GxFMb2tBjzIejcO8aw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbw4AjZ_Yvv02e2NhHcLX4H0lvuQSCanpswAqHC3avFYxgbCEgt6q6hGqPMCKhWFVbk7qw/exec"; 
 
 let currentTabName = "Current Week";
 let taskData = [];
@@ -7,12 +7,22 @@ let nextWeekOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
 const allDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
 
 let isEditMode = false;
-let undoStack = []; // Stores last 5 actions
+let undoStack = [];
+let draggedRowIndex = null;
+
+const knownDailySections = [
+    "Start of Shift", "End of Shift", "Reports", "Bathroom", "Kitchen", 
+    "Facility", "Game Area", "Tables", "Trash", "Closing", "Electronics", "Floors", "Inspection"
+];
 
 async function fetchTasks(sheetName) {
     document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;text-align:center;'>Loading checklist matrix...</div>";
+    
+    // Map Archive Sub-tabs to Archive Log backend sheet
+    const targetBackendSheet = (sheetName.startsWith("Archive Log")) ? "Archive Log" : sheetName;
+
     try {
-        const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheetName)}`);
+        const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(targetBackendSheet)}`);
         const json = await response.json();
         
         if (json && json.masterOperatingDays) {
@@ -24,12 +34,33 @@ async function fetchTasks(sheetName) {
         } else {
             taskData = [];
         }
+
+        // Filter archive logs by week offset (Last Week vs 2 Weeks Ago)
+        if (sheetName.startsWith("Archive Log")) {
+            filterArchiveDataByWeek(sheetName);
+        }
         
         renderChecklist();
     } catch (error) {
         console.error("Fetch Error:", error);
         document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;color:red;'>Error loading data. Verify deployment setup.</div>";
     }
+}
+
+function filterArchiveDataByWeek(archiveTabName) {
+    if (taskData.length === 0) return;
+
+    // Get unique timestamps in descending order (newest rotation first)
+    const timestamps = [...new Set(taskData.map(t => t.Timestamp))].filter(Boolean);
+    
+    if (timestamps.length === 0) return;
+
+    let targetTimestamp = timestamps[0]; // Last Week (most recent rotation)
+    if (archiveTabName === "Archive Log 2" && timestamps.length > 1) {
+        targetTimestamp = timestamps[1]; // 2 Weeks Ago
+    }
+
+    taskData = taskData.filter(t => t.Timestamp === targetTimestamp);
 }
 
 function getScheduleType(task) {
@@ -43,7 +74,7 @@ function toggleEditMode() {
         btn.innerText = "✖ Exit Edit Mode";
         btn.classList.add('active-mode');
     } else {
-        btn.innerText = "✏️ Edit Mode";
+        btn.innerText = "✏️️ Edit Mode";
         btn.classList.remove('active-mode');
     }
     renderChecklist();
@@ -90,9 +121,8 @@ function renderChecklist() {
     const isMasterTab = currentTabName === 'Master Task List';
     const isNextWeekTab = currentTabName === 'Next Week';
     const isCurrentWeekTab = currentTabName === 'Current Week';
-    const isArchiveTab = currentTabName === 'Archive Log';
+    const isArchiveTab = currentTabName.startsWith('Archive Log');
     
-    // Automatically turn off edit mode if user navigates away from Current Week
     if (!isCurrentWeekTab && isEditMode) {
         isEditMode = false;
         const btn = document.getElementById('toggle-edit-btn');
@@ -102,16 +132,12 @@ function renderChecklist() {
         }
     }
 
-    // Toggle control bars visibility
     document.getElementById('toggle-edit-btn').style.display = isCurrentWeekTab ? 'inline-block' : 'none';
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
     document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab || (isCurrentWeekTab && isEditMode)) ? 'flex' : 'none';
     document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
 
-    // Enable Drag and Drop on Next Week OR inside Edit Mode for Current Week
     const allowDragDrop = isNextWeekTab || (isCurrentWeekTab && isEditMode);
-    
-    // Hide completion controls (checkboxes/initials) on Next Week OR inside Edit Mode
     const hideCompletionControls = isNextWeekTab || (isCurrentWeekTab && isEditMode);
 
     if (isMasterTab) {
@@ -120,22 +146,16 @@ function renderChecklist() {
         return;
     }
 
-    // Count occurrences of task descriptions to differentiate Daily vs Weekly tasks
-    const taskCounts = {};
-    taskData.forEach(t => {
-        const desc = t["Task Description"];
-        if (desc) taskCounts[desc] = (taskCounts[desc] || 0) + 1;
-    });
-
     const dailyMap = new Map();
     const weeklyTasks = [];
 
+    // Accurately categorize Daily vs Weekly Tasks
     taskData.forEach(t => {
         const desc = t["Task Description"];
         if (!desc) return;
 
-        // Daily tasks exist on 2 or more days OR in Master/Current template list
-        if (taskCounts[desc] > 1 || (isArchiveTab && (t.Section === "Start of Shift" || t.Section === "End of Shift" || t.Section === "Reports" || t.Section === "Bathroom" || t.Section === "Kitchen" || t.Section === "Facility" || t.Section === "Game Area" || t.Section === "Tables" || t.Section === "Trash" || t.Section === "Closing" || t.Section === "Electronics" || t.Section === "Floors" || t.Section === "Inspection"))) {
+        const isDaily = knownDailySections.includes(t.Section) || t.ScheduleType === "Daily";
+        if (isDaily) {
             if (!dailyMap.has(desc)) dailyMap.set(desc, t);
         } else {
             weeklyTasks.push(t);
@@ -168,7 +188,7 @@ function renderChecklist() {
 
     let bodyHtml = `<tbody>`;
 
-    // 1. Daily Core Tasks Section
+    // 1. Daily Core Tasks Section Header
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Daily Core Tasks</td>
@@ -219,7 +239,7 @@ function renderChecklist() {
         bodyHtml += `</tr>`;
     });
 
-    // 2. Weekly Scheduled Tasks Section
+    // 2. Weekly Scheduled Tasks Section Header
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
@@ -294,7 +314,102 @@ function renderChecklist() {
     container.appendChild(table);
 }
 
-// Global Optimistic Handlers
+function renderMasterTaskTable(container) {
+    if (taskData.length === 0) {
+        container.innerHTML = "<div style='padding: 20px; text-align: center;'>No tasks found in Default Week. Add a task above or run database setup script.</div>";
+        return;
+    }
+
+    const tableWrapper = document.createElement('div');
+    tableWrapper.style.height = "100%";
+    tableWrapper.style.overflowY = "auto";
+
+    let html = `
+        <table class="matrix-table master-table">
+            <thead>
+                <tr>
+                    <th style="width: 5%;"></th>
+                    <th style="width: 20%;">Section</th>
+                    <th style="width: 50%;">Task Description</th>
+                    <th style="width: 15%;">Schedule Type</th>
+                    <th style="width: 10%;">Action</th>
+                </tr>
+            </thead>
+            <tbody id="master-task-tbody">
+    `;
+
+    taskData.forEach((task, index) => {
+        const schedType = getScheduleType(task);
+
+        html += `
+            <tr class="draggable-row" draggable="true" 
+                ondragstart="handleMasterRowDragStart(event, ${index})"
+                ondragover="event.preventDefault(); this.classList.add('drag-over-row');"
+                ondragleave="this.classList.remove('drag-over-row');"
+                ondrop="handleMasterRowDrop(event, ${index})">
+                <td style="text-align: center;"><span class="row-drag-handle">⋮⋮</span></td>
+                <td>
+                    <input type="text" style="width:100%;" value="${task.Section || ''}" onblur="updateMasterTask(${task.rowNum}, 1, this.value)">
+                </td>
+                <td>
+                    <input type="text" style="width:100%;" value="${task["Task Description"] || ''}" onblur="updateMasterTask(${task.rowNum}, 2, this.value)">
+                </td>
+                <td>
+                    <select style="width:100%;" onchange="updateMasterTask(${task.rowNum}, 3, this.value)">
+                        <option value="Daily" ${schedType === 'Daily' ? 'selected' : ''}>Daily</option>
+                        ${allDays.map(d => `<option value="${d}" ${schedType === d ? 'selected' : ''}>${d}</option>`).join('')}
+                    </select>
+                </td>
+                <td style="text-align: center;">
+                    <button class="action-btn danger-btn" onclick="deleteMasterTask(${task.rowNum})">Delete</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+    `;
+
+    tableWrapper.innerHTML = html;
+    container.appendChild(tableWrapper);
+}
+
+function handleMasterRowDragStart(event, index) {
+    draggedRowIndex = index;
+    event.dataTransfer.effectAllowed = "move";
+}
+
+async function handleMasterRowDrop(event, targetIndex) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over-row');
+
+    if (draggedRowIndex === null || draggedRowIndex === targetIndex) return;
+
+    const movedItem = taskData.splice(draggedRowIndex, 1)[0];
+    taskData.splice(targetIndex, 0, movedItem);
+
+    draggedRowIndex = null;
+    renderChecklist();
+    await syncMasterTaskOrder();
+}
+
+async function syncMasterTaskOrder() {
+    const payload = taskData.map(t => ({
+        section: t.Section || "",
+        desc: t["Task Description"] || "",
+        schedule: getScheduleType(t)
+    }));
+
+    await fetch(API_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reorderMasterTasks", tasks: payload })
+    });
+}
+
 async function handleAsyncCheck(rowNum, isChecked) {
     const item = taskData.find(t => t.rowNum == rowNum);
     if (item) {
@@ -387,62 +502,6 @@ async function toggleNextWeekDay(day) {
     renderChecklist();
 }
 
-function renderMasterTaskTable(container) {
-    if (taskData.length === 0) {
-        container.innerHTML = "<div style='padding: 20px; text-align: center;'>No tasks found in Default Week. Add a task above or run database setup script.</div>";
-        return;
-    }
-
-    const tableWrapper = document.createElement('div');
-    tableWrapper.style.height = "100%";
-    tableWrapper.style.overflowY = "auto";
-
-    let html = `
-        <table class="matrix-table">
-            <thead>
-                <tr>
-                    <th style="width: 20%;">Section</th>
-                    <th style="width: 50%;">Task Description</th>
-                    <th style="width: 20%;">Schedule Type</th>
-                    <th style="width: 10%;">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    taskData.forEach(task => {
-        const schedType = getScheduleType(task);
-
-        html += `
-            <tr>
-                <td>
-                    <input type="text" style="width:100%;" value="${task.Section || ''}" onblur="updateMasterTask(${task.rowNum}, 1, this.value)">
-                </td>
-                <td>
-                    <input type="text" style="width:100%;" value="${task["Task Description"] || ''}" onblur="updateMasterTask(${task.rowNum}, 2, this.value)">
-                </td>
-                <td>
-                    <select style="width:100%;" onchange="updateMasterTask(${task.rowNum}, 3, this.value)">
-                        <option value="Daily" ${schedType === 'Daily' ? 'selected' : ''}>Daily</option>
-                        ${allDays.map(d => `<option value="${d}" ${schedType === d ? 'selected' : ''}>${d}</option>`).join('')}
-                    </select>
-                </td>
-                <td style="text-align: center;">
-                    <button class="action-btn danger-btn" onclick="deleteMasterTask(${task.rowNum})">Delete</button>
-                </td>
-            </tr>
-        `;
-    });
-
-    html += `
-            </tbody>
-        </table>
-    `;
-
-    tableWrapper.innerHTML = html;
-    container.appendChild(tableWrapper);
-}
-
 function renderDayCheckboxes() {
     const boxContainer = document.getElementById('day-checkboxes');
     boxContainer.innerHTML = allDays.map(d => `
@@ -519,7 +578,7 @@ async function updateCellOnSheet(rowNum, colNum, value, sheet) {
 
 function switchTab(tabName, btnElement) {
     currentTabName = tabName;
-    undoStack = []; // Reset undo stack when switching tabs
+    undoStack = [];
     updateUndoButton();
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
