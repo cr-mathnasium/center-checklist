@@ -108,6 +108,7 @@ function renderChecklist() {
         return;
     }
 
+    // Count occurrences of task descriptions to differentiate Daily vs Weekly tasks
     const taskCounts = {};
     taskData.forEach(t => {
         const desc = t["Task Description"];
@@ -121,7 +122,8 @@ function renderChecklist() {
         const desc = t["Task Description"];
         if (!desc) return;
 
-        if (taskCounts[desc] > 1) {
+        // Daily tasks exist on 2 or more days OR in Master/Current template list
+        if (taskCounts[desc] > 1 || (isArchiveTab && (t.Section === "Start of Shift" || t.Section === "End of Shift" || t.Section === "Reports" || t.Section === "Bathroom" || t.Section === "Kitchen" || t.Section === "Facility" || t.Section === "Game Area" || t.Section === "Tables" || t.Section === "Trash" || t.Section === "Closing" || t.Section === "Electronics" || t.Section === "Floors" || t.Section === "Inspection"))) {
             if (!dailyMap.has(desc)) dailyMap.set(desc, t);
         } else {
             weeklyTasks.push(t);
