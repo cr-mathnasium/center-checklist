@@ -51,7 +51,7 @@ function toggleEditMode() {
 
 function pushUndoAction(actionObj) {
     undoStack.push(actionObj);
-    if (undoStack.length > 5) undoStack.shift(); // Limit to 5
+    if (undoStack.length > 5) undoStack.shift();
     updateUndoButton();
 }
 
@@ -89,8 +89,15 @@ function renderChecklist() {
 
     const isMasterTab = currentTabName === 'Master Task List';
     const isNextWeekTab = currentTabName === 'Next Week';
+    const isCurrentWeekTab = currentTabName === 'Current Week';
     const isArchiveTab = currentTabName === 'Archive Log';
     
+    // Enable Drag and Drop on Next Week OR inside Edit Mode for Current Week
+    const allowDragDrop = isNextWeekTab || (isCurrentWeekTab && isEditMode);
+    
+    // Hide completion controls (checkboxes/initials) on Next Week OR inside Edit Mode
+    const hideCompletionControls = isNextWeekTab || isEditMode;
+
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
     document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab || isEditMode) ? 'flex' : 'none';
     document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
@@ -147,7 +154,7 @@ function renderChecklist() {
 
     let bodyHtml = `<tbody>`;
 
-    // 1. Daily Tasks Section
+    // 1. Daily Core Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Daily Core Tasks</td>
@@ -167,8 +174,8 @@ function renderChecklist() {
             } else {
                 const isChecked = dayEntry["Done?"] === true || dayEntry["Done?"] === "TRUE";
                 
-                if (isEditMode) {
-                    bodyHtml += `<td class="day-cell"><span style="color:#9ca3af;">—</span></td>`;
+                if (hideCompletionControls) {
+                    bodyHtml += `<td class="day-cell"><span class="disabled-cell-dash">—</span></td>`;
                 } else {
                     bodyHtml += `
                         <td class="day-cell">
@@ -198,11 +205,11 @@ function renderChecklist() {
         bodyHtml += `</tr>`;
     });
 
-    // 2. Weekly Tasks Section
+    // 2. Weekly Scheduled Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
-            <td>Specific Scheduled Day Tasks ${isNextWeekTab ? '(Drag cell to reassign day)' : ''}</td>
+            <td>Specific Scheduled Day Tasks ${allowDragDrop ? '(Drag cell to reassign day)' : ''}</td>
         </tr>
     `;
 
@@ -213,7 +220,7 @@ function renderChecklist() {
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
 
-            const dropAttributes = isNextWeekTab ? `
+            const dropAttributes = allowDragDrop ? `
                 ondragover="event.preventDefault(); this.classList.add('drag-over');" 
                 ondragleave="this.classList.remove('drag-over');"
                 ondrop="handleTaskDrop(event, ${task.rowNum}, '${day}')"
@@ -222,19 +229,26 @@ function renderChecklist() {
             if (day === taskDay && isActive) {
                 const isChecked = task["Done?"] === true || task["Done?"] === "TRUE";
                 
-                const dragAttributes = isNextWeekTab ? `
+                const dragAttributes = allowDragDrop ? `
                     draggable="true" 
                     ondragstart="handleTaskDragStart(event, ${task.rowNum})"
                     class="day-cell active-weekly-cell draggable-cell"
                 ` : `class="day-cell active-weekly-cell"`;
 
-                if (isEditMode) {
-                    bodyHtml += `<td ${dragAttributes} ${dropAttributes}><span style="color:#9ca3af;">—</span></td>`;
+                if (hideCompletionControls) {
+                    bodyHtml += `
+                        <td ${dragAttributes} ${dropAttributes}>
+                            <div class="compact-cell-content">
+                                ${allowDragDrop ? '<span class="drag-handle" title="Drag to move day">⋮⋮</span>' : ''}
+                                <span class="disabled-cell-dash">—</span>
+                            </div>
+                        </td>
+                    `;
                 } else {
                     bodyHtml += `
                         <td ${dragAttributes} ${dropAttributes}>
                             <div class="compact-cell-content">
-                                ${isNextWeekTab ? '<span class="drag-handle" title="Drag to move day">⋮</span>' : ''}
+                                ${allowDragDrop ? '<span class="drag-handle" title="Drag to move day">⋮⋮</span>' : ''}
                                 <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
                                        onchange="handleAsyncCheck(${task.rowNum}, this.checked)">
                                 <input type="text" class="cell-initials" value="${task.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
@@ -312,10 +326,10 @@ async function handleTaskDrop(event, rowNum, newDay) {
     
     const item = taskData.find(t => t.rowNum == rowNum);
     if (item && item.Day !== newDay) {
-        pushUndoAction({ type: 'day', rowNum, oldDay: item.Day, sheet: "Next Week" });
+        pushUndoAction({ type: 'day', rowNum, oldDay: item.Day, sheet: currentTabName });
         item.Day = newDay;
         renderChecklist(); 
-        await updateCellOnSheet(rowNum, 1, newDay, "Next Week");
+        await updateCellOnSheet(rowNum, 1, newDay, currentTabName);
     }
 }
 
