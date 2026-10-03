@@ -274,3 +274,28 @@ body {
     font-weight: bold;
     user-select: none;
 }
+
+/* Drag and Drop styling for Default Week Master Table */
+.master-table tr.draggable-row {
+    cursor: grab;
+    transition: background-color 0.15s ease;
+}
+
+.master-table tr.draggable-row:active {
+    cursor: grabbing;
+    background-color: #fef3c7 !important;
+}
+
+.master-table tr.drag-over-row {
+    border-top: 3px solid #2563eb !important;
+    background-color: #dbeafe !important;
+}
+
+.row-drag-handle {
+    cursor: grab;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: bold;
+    padding-right: 4px;
+    user-select: none;
+}
