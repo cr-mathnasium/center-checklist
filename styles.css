@@ -14,7 +14,6 @@ body {
     overflow: hidden;
 }
 
-/* Navbar */
 .navbar { 
     display: flex; 
     background-color: #2c3e50; 
@@ -43,7 +42,6 @@ body {
     color: #3498db; 
 }
 
-/* Container */
 .container { 
     flex: 1;
     display: flex;
@@ -70,6 +68,12 @@ body {
     margin: 0;
     color: #2c3e50;
     font-weight: bold;
+}
+
+.header-right-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .reminder { 
@@ -109,7 +113,7 @@ body {
     min-width: 100px;
 }
 
-/* Compact Matrix Table */
+/* Matrix Table */
 #checklist-content {
     flex: 1;
     overflow-y: auto;
@@ -128,7 +132,7 @@ body {
     border: 1px solid #d0d7de;
     padding: 2px 4px;
     text-align: left;
-    height: 24px; /* Ultra-compact row height */
+    height: 24px;
 }
 
 .matrix-table th {
@@ -183,7 +187,16 @@ body {
     line-height: 1.2;
 }
 
-/* Compact Inline Cell Controls */
+/* Inline Editable Inputs */
+.edit-cell-input {
+    width: 100%;
+    padding: 2px;
+    border: 1px solid #3b82f6;
+    border-radius: 2px;
+    font-size: 11px;
+}
+
+/* Inline Controls */
 .compact-cell-content {
     display: flex;
     align-items: center;
@@ -219,7 +232,7 @@ body {
     border: 1px dashed #2563eb !important;
 }
 
-/* Action Buttons */
+/* Buttons */
 .action-btn {
     background-color: #3498db;
     color: white;
@@ -237,6 +250,12 @@ body {
 .action-btn.rotate-btn { background-color: #eab308; color: #422006; border: 1px solid #ca8a04; }
 .action-btn.rotate-btn:hover { background-color: #ca8a04; color: #fff; }
 .action-btn.danger-btn { background-color: #e74c3c; padding: 1px 4px; font-size: 9px; }
+
+.edit-toggle-btn { background-color: #4b5563; }
+.edit-toggle-btn.active-mode { background-color: #ef4444; }
+
+.undo-btn { background-color: #6366f1; }
+.undo-btn:hover { background-color: #4f46e5; }
 
 .gray-btn { 
     background: #e74c3c; 
