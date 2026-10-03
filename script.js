@@ -10,15 +10,15 @@ let isEditMode = false;
 let undoStack = [];
 let draggedRowIndex = null;
 
+// Base daily section names (normalized without numbers)
 const knownDailySections = [
-    "Start of Shift", "End of Shift", "Reports", "Bathroom", "Kitchen", 
-    "Facility", "Game Area", "Tables", "Trash", "Closing", "Electronics", "Floors", "Inspection"
+    "start of shift", "end of shift", "reports", "bathroom", "kitchen", 
+    "facility", "game area", "tables", "trash", "closing", "electronics", "floors", "inspection"
 ];
 
 async function fetchTasks(sheetName) {
     document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;text-align:center;'>Loading checklist matrix...</div>";
     
-    // Map Archive Sub-tabs to Archive Log backend sheet
     const targetBackendSheet = (sheetName.startsWith("Archive Log")) ? "Archive Log" : sheetName;
 
     try {
@@ -35,7 +35,6 @@ async function fetchTasks(sheetName) {
             taskData = [];
         }
 
-        // Filter archive logs by week offset (Last Week vs 2 Weeks Ago)
         if (sheetName.startsWith("Archive Log")) {
             filterArchiveDataByWeek(sheetName);
         }
@@ -50,14 +49,12 @@ async function fetchTasks(sheetName) {
 function filterArchiveDataByWeek(archiveTabName) {
     if (taskData.length === 0) return;
 
-    // Get unique timestamps in descending order (newest rotation first)
     const timestamps = [...new Set(taskData.map(t => t.Timestamp))].filter(Boolean);
-    
     if (timestamps.length === 0) return;
 
-    let targetTimestamp = timestamps[0]; // Last Week (most recent rotation)
+    let targetTimestamp = timestamps[0];
     if (archiveTabName === "Archive Log 2" && timestamps.length > 1) {
-        targetTimestamp = timestamps[1]; // 2 Weeks Ago
+        targetTimestamp = timestamps[1];
     }
 
     taskData = taskData.filter(t => t.Timestamp === targetTimestamp);
@@ -67,6 +64,21 @@ function getScheduleType(task) {
     return task.ScheduleType || task["Schedule Type"] || task["ScheduleType"] || "";
 }
 
+// Check if a task is Daily using section prefix or schedule type
+function isDailyTask(task, occurrenceCount) {
+    const schedType = getScheduleType(task);
+    if (schedType === "Daily") return true;
+
+    // Normalize section name (e.g. "Kitchen 1" -> "kitchen", "Bathroom 2" -> "bathroom")
+    const rawSection = (task.Section || "").toString().toLowerCase().trim();
+    const cleanSection = rawSection.replace(/\s*\d+$/, "").trim();
+
+    if (knownDailySections.includes(cleanSection)) return true;
+
+    // Fallback: If task repeats 2 or more times across days, it's Daily
+    return occurrenceCount > 1;
+}
+
 function toggleEditMode() {
     isEditMode = !isEditMode;
     const btn = document.getElementById('toggle-edit-btn');
@@ -74,7 +86,7 @@ function toggleEditMode() {
         btn.innerText = "✖ Exit Edit Mode";
         btn.classList.add('active-mode');
     } else {
-        btn.innerText = "✏️️ Edit Mode";
+        btn.innerText = "✏️ Edit Mode";
         btn.classList.remove('active-mode');
     }
     renderChecklist();
@@ -146,16 +158,21 @@ function renderChecklist() {
         return;
     }
 
+    // Count occurrences of each task description
+    const taskCounts = {};
+    taskData.forEach(t => {
+        const desc = t["Task Description"];
+        if (desc) taskCounts[desc] = (taskCounts[desc] || 0) + 1;
+    });
+
     const dailyMap = new Map();
     const weeklyTasks = [];
 
-    // Accurately categorize Daily vs Weekly Tasks
     taskData.forEach(t => {
         const desc = t["Task Description"];
         if (!desc) return;
 
-        const isDaily = knownDailySections.includes(t.Section) || t.ScheduleType === "Daily";
-        if (isDaily) {
+        if (isDailyTask(t, taskCounts[desc])) {
             if (!dailyMap.has(desc)) dailyMap.set(desc, t);
         } else {
             weeklyTasks.push(t);
@@ -188,7 +205,7 @@ function renderChecklist() {
 
     let bodyHtml = `<tbody>`;
 
-    // 1. Daily Core Tasks Section Header
+    // 1. Daily Core Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Daily Core Tasks</td>
@@ -239,7 +256,7 @@ function renderChecklist() {
         bodyHtml += `</tr>`;
     });
 
-    // 2. Weekly Scheduled Tasks Section Header
+    // 2. Weekly Scheduled Tasks Section
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
