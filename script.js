@@ -10,12 +10,6 @@ let isEditMode = false;
 let undoStack = [];
 let draggedRowIndex = null;
 
-// Base daily section names (normalized without numbers)
-const knownDailySections = [
-    "start of shift", "end of shift", "reports", "bathroom", "kitchen", 
-    "facility", "game area", "tables", "trash", "closing", "electronics", "floors", "inspection"
-];
-
 async function fetchTasks(sheetName) {
     document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;text-align:center;'>Loading checklist matrix...</div>";
     
@@ -62,21 +56,6 @@ function filterArchiveDataByWeek(archiveTabName) {
 
 function getScheduleType(task) {
     return task.ScheduleType || task["Schedule Type"] || task["ScheduleType"] || "";
-}
-
-// Check if a task is Daily using section prefix or schedule type
-function isDailyTask(task, occurrenceCount) {
-    const schedType = getScheduleType(task);
-    if (schedType === "Daily") return true;
-
-    // Normalize section name (e.g. "Kitchen 1" -> "kitchen", "Bathroom 2" -> "bathroom")
-    const rawSection = (task.Section || "").toString().toLowerCase().trim();
-    const cleanSection = rawSection.replace(/\s*\d+$/, "").trim();
-
-    if (knownDailySections.includes(cleanSection)) return true;
-
-    // Fallback: If task repeats 2 or more times across days, it's Daily
-    return occurrenceCount > 1;
 }
 
 function toggleEditMode() {
@@ -158,7 +137,7 @@ function renderChecklist() {
         return;
     }
 
-    // Count occurrences of each task description
+    // Task occurrence map for matrix cell matching
     const taskCounts = {};
     taskData.forEach(t => {
         const desc = t["Task Description"];
@@ -168,11 +147,15 @@ function renderChecklist() {
     const dailyMap = new Map();
     const weeklyTasks = [];
 
+    // Strictly separate based on Google Sheet Schedule Type or occurrence count
     taskData.forEach(t => {
         const desc = t["Task Description"];
         if (!desc) return;
 
-        if (isDailyTask(t, taskCounts[desc])) {
+        const schedType = getScheduleType(t);
+        const isDaily = (schedType === "Daily") || (taskCounts[desc] > 1);
+
+        if (isDaily) {
             if (!dailyMap.has(desc)) dailyMap.set(desc, t);
         } else {
             weeklyTasks.push(t);
