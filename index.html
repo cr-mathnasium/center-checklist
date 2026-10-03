@@ -18,23 +18,27 @@
     <div class="container">
         <div class="header-bar">
             <h2>Cleaning Checklist Dashboard</h2>
-            <div class="reminder">REMINDER: Report Behavior issues to CD right away. Especially if disruptive, distracting, or disrespectful.</div>
+            <div class="header-right-controls">
+                <button id="undo-btn" class="action-btn undo-btn" style="display: none;" onclick="undoLastAction()">↩ Undo (0)</button>
+                <button id="toggle-edit-btn" class="action-btn edit-toggle-btn" onclick="toggleEditMode()">✏️ Edit Mode</button>
+                <div class="reminder">REMINDER: Report Behavior issues to CD right away.</div>
+            </div>
         </div>
 
-        <!-- Rotate Week Trigger Bar (Next Week Tab) -->
+        <!-- Rotate Week Bar (Next Week) -->
         <div id="rotate-week-container" class="rotate-week-bar" style="display: none;">
             <span>Ready to complete the current week?</span>
             <button class="action-btn rotate-btn" onclick="triggerWeekRotation()">🔄 Promote Next Week to Current Week & Archive</button>
         </div>
 
-        <!-- Operating Days Selector (Default Week Tab) -->
+        <!-- Operating Days Selector (Default Week) -->
         <div id="days-selector-container" class="days-selector-bar" style="display: none;">
             <strong>Default Operating Days:</strong>
             <div id="day-checkboxes"></div>
             <button class="action-btn" onclick="saveOperatingDays()">Save Operating Days</button>
         </div>
 
-        <!-- Add Task Bar (Default Week & Next Week Tabs) -->
+        <!-- Add Task Bar (Editable Modes) -->
         <div id="add-task-container" class="add-task-bar" style="display: none;">
             <input type="text" id="new-section" placeholder="Section (e.g. Kitchen)">
             <input type="text" id="new-desc" placeholder="Task Description">
