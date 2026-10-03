@@ -92,15 +92,27 @@ function renderChecklist() {
     const isCurrentWeekTab = currentTabName === 'Current Week';
     const isArchiveTab = currentTabName === 'Archive Log';
     
+    // Automatically turn off edit mode if user navigates away from Current Week
+    if (!isCurrentWeekTab && isEditMode) {
+        isEditMode = false;
+        const btn = document.getElementById('toggle-edit-btn');
+        if (btn) {
+            btn.innerText = "✏️ Edit Mode";
+            btn.classList.remove('active-mode');
+        }
+    }
+
+    // Toggle control bars visibility
+    document.getElementById('toggle-edit-btn').style.display = isCurrentWeekTab ? 'inline-block' : 'none';
+    document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
+    document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab || (isCurrentWeekTab && isEditMode)) ? 'flex' : 'none';
+    document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
+
     // Enable Drag and Drop on Next Week OR inside Edit Mode for Current Week
     const allowDragDrop = isNextWeekTab || (isCurrentWeekTab && isEditMode);
     
     // Hide completion controls (checkboxes/initials) on Next Week OR inside Edit Mode
-    const hideCompletionControls = isNextWeekTab || isEditMode;
-
-    document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
-    document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab || isEditMode) ? 'flex' : 'none';
-    document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
+    const hideCompletionControls = isNextWeekTab || (isCurrentWeekTab && isEditMode);
 
     if (isMasterTab) {
         renderDayCheckboxes();
