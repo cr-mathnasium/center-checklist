@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxWcWTP6movd2y4KDU_uB3F-aCtWDtnvgeSJX9T1U5LN_6hInS9z-rK_Q02rJ24C8T5Tg/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbwAZv62fLT6EQ6VNI85DK1RI2lSLkSX-cNk-W3GVcBMLoBf9M5CS8SczY6fG1HHjwTIxA/exec"; 
 
 let currentTabName = "Current Week";
 let selectedArchiveWeek = "1";
@@ -477,17 +477,25 @@ async function triggerWeekRotation() {
     document.getElementById('checklist-content').innerHTML = "<div style='padding:20px;text-align:center;'>Rotating week and updating database...</div>";
 
     try {
-        await fetch(API_URL, {
+        const response = await fetch(API_URL, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({ action: "rotateWeek" })
         });
         
+        const result = await response.json();
+        
+        if (result && result.status === "error") {
+            alert("⚠️ ROTATION BLOCKED:\n\n" + result.message);
+            fetchTasks("Next Week");
+            return;
+        }
+
         alert("Week successfully rotated! Loading new Current Week...");
         switchTab('Current Week', document.querySelectorAll('.nav-btn')[0]);
     } catch (error) {
-        alert("Error performing rotation. Check deployment settings.");
+        console.error("Rotation error:", error);
+        alert("Error performing rotation. Verify Apps Script deployment.");
         fetchTasks("Next Week");
     }
 }
