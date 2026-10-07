@@ -1,6 +1,7 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbw4AjZ_Yvv02e2NhHcLX4H0lvuQSCanpswAqHC3avFYxgbCEgt6q6hGqPMCKhWFVbk7qw/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbzH3Nv579kC_f5w-YXXYmOizZuiSeqWXLU4BEcKYOC1cXNsm0L8epJgX5_HPxsvEIML/exec"; 
 
 let currentTabName = "Current Week";
+let selectedArchiveWeek = "1";
 let taskData = [];
 let masterOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
 let nextWeekOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
@@ -30,7 +31,7 @@ async function fetchTasks(sheetName) {
         }
 
         if (sheetName.startsWith("Archive Log")) {
-            filterArchiveDataByWeek(sheetName);
+            filterArchiveDataByWeek();
         }
         
         renderChecklist();
@@ -40,18 +41,23 @@ async function fetchTasks(sheetName) {
     }
 }
 
-function filterArchiveDataByWeek(archiveTabName) {
+function filterArchiveDataByWeek() {
     if (taskData.length === 0) return;
 
     const timestamps = [...new Set(taskData.map(t => t.Timestamp))].filter(Boolean);
     if (timestamps.length === 0) return;
 
     let targetTimestamp = timestamps[0];
-    if (archiveTabName === "Archive Log 2" && timestamps.length > 1) {
+    if (selectedArchiveWeek === "2" && timestamps.length > 1) {
         targetTimestamp = timestamps[1];
     }
 
     taskData = taskData.filter(t => t.Timestamp === targetTimestamp);
+}
+
+function changeArchiveWeek(weekVal) {
+    selectedArchiveWeek = weekVal;
+    fetchTasks("Archive Log");
 }
 
 function getScheduleType(task) {
@@ -124,11 +130,13 @@ function renderChecklist() {
     }
 
     document.getElementById('toggle-edit-btn').style.display = isCurrentWeekTab ? 'inline-block' : 'none';
+    document.getElementById('archive-selector-container').style.display = isArchiveTab ? 'flex' : 'none';
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
     document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab || (isCurrentWeekTab && isEditMode)) ? 'flex' : 'none';
     document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
 
     const allowDragDrop = isNextWeekTab || (isCurrentWeekTab && isEditMode);
+    const allowTextEditing = isNextWeekTab || (isCurrentWeekTab && isEditMode);
     const hideCompletionControls = isNextWeekTab || (isCurrentWeekTab && isEditMode);
 
     if (isMasterTab) {
@@ -137,7 +145,6 @@ function renderChecklist() {
         return;
     }
 
-    // Task occurrence map for matrix cell matching
     const taskCounts = {};
     taskData.forEach(t => {
         const desc = t["Task Description"];
@@ -147,7 +154,6 @@ function renderChecklist() {
     const dailyMap = new Map();
     const weeklyTasks = [];
 
-    // Strictly separate based on Google Sheet Schedule Type or occurrence count
     taskData.forEach(t => {
         const desc = t["Task Description"];
         if (!desc) return;
@@ -206,17 +212,16 @@ function renderChecklist() {
             if (!dayEntry || !isActive) {
                 bodyHtml += `<td class="day-cell grayed-out"></td>`;
             } else {
-                const isChecked = dayEntry["Done?"] === true || dayEntry["Done?"] === "TRUE";
-                
                 if (hideCompletionControls) {
                     bodyHtml += `<td class="day-cell"><span class="disabled-cell-dash">—</span></td>`;
                 } else {
+                    const initialsVal = dayEntry.Initials || '';
+                    const hasInitials = initialsVal.trim().length > 0;
                     bodyHtml += `
                         <td class="day-cell">
                             <div class="compact-cell-content">
-                                <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
-                                       onchange="handleAsyncCheck(${dayEntry.rowNum}, this.checked)">
-                                <input type="text" class="cell-initials" value="${dayEntry.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
+                                <input type="text" class="cell-initials ${hasInitials ? 'has-initials' : ''}" 
+                                       value="${initialsVal}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
                                        onblur="handleAsyncInitials(${dayEntry.rowNum}, this.value)">
                             </div>
                         </td>
@@ -225,8 +230,8 @@ function renderChecklist() {
             }
         });
 
-        if (isEditMode && dailyMap.get(desc)) {
-            const rowItem = dailyMap.get(desc);
+        const rowItem = dailyMap.get(desc);
+        if (allowTextEditing && rowItem) {
             bodyHtml += `
                 <td class="task-desc-cell">
                     <input type="text" class="edit-cell-input" value="${desc}" onblur="handleAsyncDescEdit(${rowItem.rowNum}, this.value)">
@@ -261,8 +266,6 @@ function renderChecklist() {
             ` : '';
 
             if (day === taskDay && isActive) {
-                const isChecked = task["Done?"] === true || task["Done?"] === "TRUE";
-                
                 const dragAttributes = allowDragDrop ? `
                     draggable="true" 
                     ondragstart="handleTaskDragStart(event, ${task.rowNum})"
@@ -279,13 +282,14 @@ function renderChecklist() {
                         </td>
                     `;
                 } else {
+                    const initialsVal = task.Initials || '';
+                    const hasInitials = initialsVal.trim().length > 0;
                     bodyHtml += `
                         <td ${dragAttributes} ${dropAttributes}>
                             <div class="compact-cell-content">
                                 ${allowDragDrop ? '<span class="drag-handle" title="Drag to move day">⋮⋮</span>' : ''}
-                                <input type="checkbox" class="cell-checkbox" ${isChecked ? 'checked' : ''} ${isArchiveTab ? 'disabled' : ''}
-                                       onchange="handleAsyncCheck(${task.rowNum}, this.checked)">
-                                <input type="text" class="cell-initials" value="${task.Initials || ''}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
+                                <input type="text" class="cell-initials ${hasInitials ? 'has-initials' : ''}" 
+                                       value="${initialsVal}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
                                        onblur="handleAsyncInitials(${task.rowNum}, this.value)">
                             </div>
                         </td>
@@ -296,7 +300,7 @@ function renderChecklist() {
             }
         });
 
-        if (isEditMode) {
+        if (allowTextEditing) {
             bodyHtml += `
                 <td class="task-desc-cell">
                     <input type="text" class="edit-cell-input" value="${task["Task Description"]}" onblur="handleAsyncDescEdit(${task.rowNum}, this.value)">
@@ -410,26 +414,20 @@ async function syncMasterTaskOrder() {
     });
 }
 
-async function handleAsyncCheck(rowNum, isChecked) {
-    const item = taskData.find(t => t.rowNum == rowNum);
-    if (item) {
-        pushUndoAction({ type: 'cell', rowNum, field: 'Done?', oldValue: item['Done?'], colNum: 4, sheet: currentTabName });
-        item['Done?'] = isChecked ? "TRUE" : "FALSE";
-        renderChecklist();
-        await updateCellOnSheet(rowNum, 4, isChecked ? "TRUE" : "FALSE", currentTabName);
-    }
-}
-
+// Initials-Only Completion Handler
 async function handleAsyncInitials(rowNum, initials) {
     const item = taskData.find(t => t.rowNum == rowNum);
     if (item && item.Initials !== initials) {
         pushUndoAction({ type: 'cell', rowNum, field: 'Initials', oldValue: item.Initials, colNum: 5, sheet: currentTabName });
         item.Initials = initials;
-        if (initials && initials.trim().length > 0) {
-            item['Done?'] = "TRUE";
-            await updateCellOnSheet(rowNum, 4, "TRUE", currentTabName);
-        }
+        
+        const isDone = (initials && initials.trim().length > 0) ? "TRUE" : "FALSE";
+        item['Done?'] = isDone;
+
         renderChecklist();
+        
+        // Update both Done? and Initials columns in Google Sheets
+        await updateCellOnSheet(rowNum, 4, isDone, currentTabName);
         await updateCellOnSheet(rowNum, 5, initials, currentTabName);
     }
 }
