@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzPUK8Ks2gb6jsA_eenmOunLLoLXUkIhiz85QujDIGeyx0M9hX7GHSI5PDgbDesZH9Seg/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbxWcWTP6movd2y4KDU_uB3F-aCtWDtnvgeSJX9T1U5LN_6hInS9z-rK_Q02rJ24C8T5Tg/exec"; 
 
 let currentTabName = "Current Week";
 let selectedArchiveWeek = "1";
