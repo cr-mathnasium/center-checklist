@@ -177,6 +177,7 @@ function renderChecklist() {
     `;
     
     allDays.forEach(day => {
+        // Ensure Sun through Sat are active for Archive and Current Week
         const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
         headerHtml += `
             <th class="day-col-head ${!isActive ? 'grayed-out' : ''}">
@@ -207,16 +208,23 @@ function renderChecklist() {
         
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
-            const dayEntry = taskData.find(t => t["Task Description"] === desc && t.Day === day);
+            
+            // Robust day matching: normalize string comparisons (case-insensitive)
+            const dayEntry = taskData.find(t => 
+                (t["Task Description"] || "").trim().toLowerCase() === desc.trim().toLowerCase() && 
+                (t.Day || "").trim().toLowerCase() === day.trim().toLowerCase()
+            );
 
-            if (!dayEntry || !isActive) {
+            if (!isActive) {
                 bodyHtml += `<td class="day-cell grayed-out"></td>`;
+            } else if (!dayEntry) {
+                bodyHtml += `<td class="day-cell blocked-cell"></td>`;
             } else {
                 if (hideCompletionControls) {
                     bodyHtml += `<td class="day-cell"><span class="disabled-cell-dash">—</span></td>`;
                 } else {
-                    const initialsVal = dayEntry.Initials || '';
-                    const hasInitials = initialsVal.trim().length > 0;
+                    const initialsVal = (dayEntry.Initials || "").toString().trim();
+                    const hasInitials = initialsVal.length > 0;
                     bodyHtml += `
                         <td class="day-cell">
                             <div class="compact-cell-content">
@@ -254,10 +262,11 @@ function renderChecklist() {
 
     weeklyTasks.forEach(task => {
         bodyHtml += `<tr>`;
-        const taskDay = task.Day;
+        const taskDay = (task.Day || "").trim().toLowerCase();
 
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
+            const isAssignedDay = taskDay === day.trim().toLowerCase();
 
             const dropAttributes = allowDragDrop ? `
                 ondragover="event.preventDefault(); this.classList.add('drag-over');" 
@@ -265,7 +274,7 @@ function renderChecklist() {
                 ondrop="handleTaskDrop(event, ${task.rowNum}, '${day}')"
             ` : '';
 
-            if (day === taskDay && isActive) {
+            if (isAssignedDay && isActive) {
                 const dragAttributes = allowDragDrop ? `
                     draggable="true" 
                     ondragstart="handleTaskDragStart(event, ${task.rowNum})"
@@ -282,8 +291,8 @@ function renderChecklist() {
                         </td>
                     `;
                 } else {
-                    const initialsVal = task.Initials || '';
-                    const hasInitials = initialsVal.trim().length > 0;
+                    const initialsVal = (task.Initials || "").toString().trim();
+                    const hasInitials = initialsVal.length > 0;
                     bodyHtml += `
                         <td ${dragAttributes} ${dropAttributes}>
                             <div class="compact-cell-content">
@@ -414,7 +423,6 @@ async function syncMasterTaskOrder() {
     });
 }
 
-// Initials-Only Completion Handler
 async function handleAsyncInitials(rowNum, initials) {
     const item = taskData.find(t => t.rowNum == rowNum);
     if (item && item.Initials !== initials) {
@@ -426,7 +434,6 @@ async function handleAsyncInitials(rowNum, initials) {
 
         renderChecklist();
         
-        // Update both Done? and Initials columns in Google Sheets
         await updateCellOnSheet(rowNum, 4, isDone, currentTabName);
         await updateCellOnSheet(rowNum, 5, initials, currentTabName);
     }
