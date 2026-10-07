@@ -101,7 +101,7 @@ body {
     flex-shrink: 0;
 }
 
-.add-task-bar input, .add-task-bar select {
+.add-task-bar input, .add-task-bar select, .days-selector-bar select {
     padding: 2px 6px;
     border: 1px solid #ccc;
     border-radius: 3px;
@@ -187,7 +187,6 @@ body {
     line-height: 1.2;
 }
 
-/* Inline Editable Inputs */
 .edit-cell-input {
     width: 100%;
     padding: 2px;
@@ -196,7 +195,6 @@ body {
     font-size: 11px;
 }
 
-/* Inline Controls */
 .compact-cell-content {
     display: flex;
     align-items: center;
@@ -204,20 +202,23 @@ body {
     gap: 2px;
 }
 
-.cell-checkbox {
-    cursor: pointer;
-    transform: scale(0.9);
-    margin: 0;
-}
-
+/* Initials Input Box */
 .cell-initials {
-    width: 26px;
+    width: 32px;
     padding: 1px 2px;
-    border: 1px solid #ccc;
+    border: 1px solid #cbd5e1;
     border-radius: 2px;
     text-align: center;
-    font-size: 9px;
+    font-size: 10px;
+    font-weight: bold;
     text-transform: uppercase;
+    background-color: #ffffff;
+}
+
+.cell-initials.has-initials {
+    background-color: #dcfce7;
+    border-color: #16a34a;
+    color: #15803d;
 }
 
 .drag-handle {
@@ -272,30 +273,5 @@ body {
     color: #9ca3af;
     font-size: 10px;
     font-weight: bold;
-    user-select: none;
-}
-
-/* Drag and Drop styling for Default Week Master Table */
-.master-table tr.draggable-row {
-    cursor: grab;
-    transition: background-color 0.15s ease;
-}
-
-.master-table tr.draggable-row:active {
-    cursor: grabbing;
-    background-color: #fef3c7 !important;
-}
-
-.master-table tr.drag-over-row {
-    border-top: 3px solid #2563eb !important;
-    background-color: #dbeafe !important;
-}
-
-.row-drag-handle {
-    cursor: grab;
-    color: #64748b;
-    font-size: 12px;
-    font-weight: bold;
-    padding-right: 4px;
     user-select: none;
 }
