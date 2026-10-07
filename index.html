@@ -10,20 +10,28 @@
 
     <div class="navbar">
         <button class="nav-btn active" onclick="switchTab('Current Week', this)">This Week</button>
-        <button class="nav-btn" onclick="switchTab('Archive Log 1', this)">Last Week (Week 1)</button>
-        <button class="nav-btn" onclick="switchTab('Archive Log 2', this)">2 Weeks Ago (Week 2)</button>
+        <button class="nav-btn" onclick="switchTab('Archive Log', this)">Archive</button>
         <button class="nav-btn" onclick="switchTab('Next Week', this)">Next Week</button>
         <button class="nav-btn" onclick="switchTab('Master Task List', this)">Default Week</button>
     </div>
 
     <div class="container">
         <div class="header-bar">
-            <h2 id="view-title">Cleaning Checklist Dashboard</h2>
+            <h2>Cleaning Checklist Dashboard</h2>
             <div class="header-right-controls">
                 <button id="undo-btn" class="action-btn undo-btn" style="display: none;" onclick="undoLastAction()">↩ Undo (0)</button>
                 <button id="toggle-edit-btn" class="action-btn edit-toggle-btn" onclick="toggleEditMode()">✏️ Edit Mode</button>
                 <div class="reminder">REMINDER: Report Behavior issues to CD right away.</div>
             </div>
+        </div>
+
+        <!-- Archive Week Selector Bar -->
+        <div id="archive-selector-container" class="days-selector-bar" style="display: none;">
+            <strong>Select Archive Period:</strong>
+            <select id="archive-week-select" onchange="changeArchiveWeek(this.value)">
+                <option value="1">Week 1 (Last Week)</option>
+                <option value="2">Week 2 (2 Weeks Ago)</option>
+            </select>
         </div>
 
         <!-- Rotate Week Bar -->
