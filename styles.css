@@ -95,10 +95,18 @@ body {
     margin-bottom: 6px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     flex-wrap: wrap;
     font-size: 11px;
     flex-shrink: 0;
+}
+
+.rotate-week-bar {
+    background-color: #fefce8;
+    border-color: #fef08a;
+    color: #854d0e;
+    font-weight: 600;
 }
 
 .add-task-bar input, .add-task-bar select, .days-selector-bar select {
@@ -233,6 +241,29 @@ body {
     border: 1px dashed #2563eb !important;
 }
 
+/* Master Table Drag Reordering */
+.master-table tr.draggable-row {
+    cursor: grab;
+}
+
+.master-table tr.draggable-row:active {
+    cursor: grabbing;
+    background-color: #fef3c7 !important;
+}
+
+.master-table tr.drag-over-row {
+    border-top: 3px solid #2563eb !important;
+    background-color: #dbeafe !important;
+}
+
+.row-drag-handle {
+    cursor: grab;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: bold;
+    user-select: none;
+}
+
 /* Buttons */
 .action-btn {
     background-color: #3498db;
@@ -250,6 +281,8 @@ body {
 .action-btn.green-btn:hover { background-color: #27ae60; }
 .action-btn.rotate-btn { background-color: #eab308; color: #422006; border: 1px solid #ca8a04; }
 .action-btn.rotate-btn:hover { background-color: #ca8a04; color: #fff; }
+.action-btn.reset-btn { background-color: #dc2626; color: white; }
+.action-btn.reset-btn:hover { background-color: #b91c1c; }
 .action-btn.danger-btn { background-color: #e74c3c; padding: 1px 4px; font-size: 9px; }
 
 .edit-toggle-btn { background-color: #4b5563; }
