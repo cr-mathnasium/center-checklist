@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwAZv62fLT6EQ6VNI85DK1RI2lSLkSX-cNk-W3GVcBMLoBf9M5CS8SczY6fG1HHjwTIxA/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbzhGClHcNRoNAmdWyqKlAgoz0f4W_uIQdleSNZK2JmxcJsJkBNGUEHw24qObSILOLrc9g/exec"; 
 
 let currentTabName = "Current Week";
 let selectedArchiveWeek = "1";
@@ -14,7 +14,7 @@ let draggedRowIndex = null;
 async function fetchTasks(sheetName) {
     document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;text-align:center;'>Loading checklist matrix...</div>";
     
-    const targetBackendSheet = (sheetName.startsWith("Archive Log")) ? "Archive Log" : sheetName;
+    const targetBackendSheet = (sheetName.startsWith("Archive Log") || sheetName === "Archive") ? "Archive Log" : sheetName;
 
     try {
         const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(targetBackendSheet)}`);
@@ -30,7 +30,7 @@ async function fetchTasks(sheetName) {
             taskData = [];
         }
 
-        if (sheetName.startsWith("Archive Log")) {
+        if (targetBackendSheet === "Archive Log") {
             filterArchiveDataByWeek();
         }
         
@@ -42,14 +42,14 @@ async function fetchTasks(sheetName) {
 }
 
 function filterArchiveDataByWeek() {
-    if (taskData.length === 0) return;
+    if (!taskData || taskData.length === 0) return;
 
     const timestamps = [...new Set(taskData.map(t => t.Timestamp))].filter(Boolean);
     if (timestamps.length === 0) return;
 
-    let targetTimestamp = timestamps[0];
+    let targetTimestamp = timestamps[timestamps.length - 1]; // Week 1 (Most recent)
     if (selectedArchiveWeek === "2" && timestamps.length > 1) {
-        targetTimestamp = timestamps[1];
+        targetTimestamp = timestamps[timestamps.length - 2]; // Week 2 (2 weeks ago)
     }
 
     taskData = taskData.filter(t => t.Timestamp === targetTimestamp);
@@ -118,7 +118,7 @@ function renderChecklist() {
     const isMasterTab = currentTabName === 'Master Task List';
     const isNextWeekTab = currentTabName === 'Next Week';
     const isCurrentWeekTab = currentTabName === 'Current Week';
-    const isArchiveTab = currentTabName.startsWith('Archive Log');
+    const isArchiveTab = currentTabName.startsWith('Archive Log') || currentTabName === 'Archive';
     
     if (!isCurrentWeekTab && isEditMode) {
         isEditMode = false;
@@ -177,7 +177,6 @@ function renderChecklist() {
     `;
     
     allDays.forEach(day => {
-        // Ensure Sun through Sat are active for Archive and Current Week
         const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
         headerHtml += `
             <th class="day-col-head ${!isActive ? 'grayed-out' : ''}">
@@ -209,10 +208,9 @@ function renderChecklist() {
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
             
-            // Robust day matching: normalize string comparisons (case-insensitive)
             const dayEntry = taskData.find(t => 
-                (t["Task Description"] || "").trim().toLowerCase() === desc.trim().toLowerCase() && 
-                (t.Day || "").trim().toLowerCase() === day.trim().toLowerCase()
+                (t["Task Description"] || "").toString().trim().toLowerCase() === desc.trim().toLowerCase() && 
+                (t.Day || "").toString().trim().toLowerCase() === day.trim().toLowerCase()
             );
 
             if (!isActive) {
@@ -262,7 +260,7 @@ function renderChecklist() {
 
     weeklyTasks.forEach(task => {
         bodyHtml += `<tr>`;
-        const taskDay = (task.Day || "").trim().toLowerCase();
+        const taskDay = (task.Day || "").toString().trim().toLowerCase();
 
         allDays.forEach(day => {
             const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
@@ -464,6 +462,28 @@ async function handleTaskDrop(event, rowNum, newDay) {
         item.Day = newDay;
         renderChecklist(); 
         await updateCellOnSheet(rowNum, 1, newDay, currentTabName);
+    }
+}
+
+async function triggerNextWeekReset() {
+    const confirmReset = confirm("Are you sure you want to reset Next Week?\n\nThis will clear all custom day assignments in Next Week and repopulate tasks strictly from the Default Week master list.");
+    if (!confirmReset) return;
+
+    document.getElementById('checklist-content').innerHTML = "<div style='padding:20px;text-align:center;'>Resetting Next Week from Default Week...</div>";
+
+    try {
+        await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({ action: "resetNextWeek" })
+        });
+        
+        alert("Next Week has been successfully reset from Default Week!");
+        fetchTasks("Next Week");
+    } catch (error) {
+        console.error("Reset error:", error);
+        alert("Error resetting Next Week. Verify Apps Script deployment.");
+        fetchTasks("Next Week");
     }
 }
 
