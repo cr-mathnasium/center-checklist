@@ -25,7 +25,7 @@
             </div>
         </div>
 
-        <!-- Archive Week Selector Bar -->
+        <!-- Archive Selector Bar -->
         <div id="archive-selector-container" class="days-selector-bar" style="display: none;">
             <strong>Select Archive Period:</strong>
             <select id="archive-week-select" onchange="changeArchiveWeek(this.value)">
@@ -34,13 +34,16 @@
             </select>
         </div>
 
-        <!-- Rotate Week Bar -->
+        <!-- Rotate & Reset Week Bar (Next Week Tab) -->
         <div id="rotate-week-container" class="rotate-week-bar" style="display: none;">
-            <span>Ready to complete the current week?</span>
-            <button class="action-btn rotate-btn" onclick="triggerWeekRotation()">🔄 Promote Next Week to Current Week & Archive</button>
+            <span>Next Week Controls:</span>
+            <div style="display: flex; gap: 8px;">
+                <button class="action-btn reset-btn" onclick="triggerNextWeekReset()">↺ Reset to Default Week</button>
+                <button class="action-btn rotate-btn" onclick="triggerWeekRotation()">🔄 Promote Next Week to Current Week & Archive</button>
+            </div>
         </div>
 
-        <!-- Operating Days Selector -->
+        <!-- Operating Days Selector (Default Week Tab) -->
         <div id="days-selector-container" class="days-selector-bar" style="display: none;">
             <strong>Default Operating Days:</strong>
             <div id="day-checkboxes"></div>
