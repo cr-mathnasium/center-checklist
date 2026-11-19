@@ -480,3 +480,24 @@ body {
     font-weight: bold;
     user-select: none;
 }
+
+/* --- SYNC STATUS BADGE --- */
+.sync-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.sync-badge.synced {
+    background-color: #DCFCE7;
+    color: #15803D;
+    border: 1px solid #86EFAC;
+}
+
+.sync-badge.saving {
+    background-color: #FEF3C7;
+    color: #B45309;
+    border: 1px solid #FCD34D;
+}
