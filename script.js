@@ -2,7 +2,7 @@
 // CENTER CLEANING CHECKLIST - FRONTEND CONTROLLER (SERIALIZED SYNC QUEUE)
 // ============================================================================
 
-const API_URL = "https://script.google.com/macros/s/AKfycbzhGClHcNRoNAmdWyqKlAgoz0f4W_uIQdleSNZK2JmxcJsJkBNGUEHw24qObSILOLrc9g/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbw2MMs_2yIHPeYBp0BdEM2Y5-DCjXzcPGCsYu2ri5WVDKEmc0SGS5-iVCNk7Q-jQkPxyw/exec"; 
 
 // --- GLOBAL APPLICATION STATE ---
 let currentTabName = "Current Week";
