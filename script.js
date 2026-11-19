@@ -1,20 +1,49 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzhGClHcNRoNAmdWyqKlAgoz0f4W_uIQdleSNZK2JmxcJsJkBNGUEHw24qObSILOLrc9g/exec"; 
+// ============================================================================
+// CENTER CLEANING CHECKLIST - FRONTEND CONTROLLER
+// Supports:
+// - Optimistic instant UI updates with background Google Sheets sync
+// - 5-step Undo Stack for edits, initials, and drag-and-drop moves
+// - 2-Week Advance Planning (Next Week & 2 Weeks Out) with Week A / Week B forms
+// - Full on-page editing (Section, Description, Delete, Add, Reorder, Week Date)
+// ============================================================================
 
+// ⚠️ KEEP YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE:
+const API_URL = "https://script.google.com/macros/s/AKfycbymL4d3ljznC66zA-eMDaHDAleUiwivA7IDZdwD8X3stHhBBq76SwmKKnJNlG1qdzXNNw/exec"; 
+
+// --- GLOBAL APPLICATION STATE ---
 let currentTabName = "Current Week";
-let selectedArchiveWeek = "1";
-let taskData = [];
+let allArchiveRows = [];           // Holds raw Archive Log rows so dropdown switching is instant
+let selectedArchiveStamp = "";     // Currently selected archived week timestamp
+let taskData = [];                 // Tasks for the currently active tab
+
+// Operating days per schedule tier
 let masterOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
 let nextWeekOperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
+let week2OperatingDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Sat"];
 const allDays = ["Sun", "Mon", "Tues", "Wed", "Thurs", "Fri", "Sat"];
 
+// Editable Week Dates & Active Form Trackers (A or B)
+let weekDates = { "Current Week": "", "Next Week": "", "Week 2 Out": "" };
+let weekForms = { "Current Week": "A", "Next Week": "B", "Week 2 Out": "A" };
+
+// UI Modes & Undo History
 let isEditMode = false;
 let undoStack = [];
 let draggedRowIndex = null;
 
+// ============================================================================
+// 1. DATA FETCHING & ARCHIVE FILTERING
+// ============================================================================
+
+/**
+ * Fetches tasks and settings from Google Apps Script for the selected tab.
+ */
 async function fetchTasks(sheetName) {
-    document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;text-align:center;'>Loading checklist matrix...</div>";
+    const contentEl = document.getElementById('checklist-content');
+    contentEl.innerHTML = "<div style='padding:20px;text-align:center;font-weight:600;color:#475569;'>Loading checklist matrix...</div>";
     
-    const targetBackendSheet = (sheetName.startsWith("Archive Log") || sheetName === "Archive") ? "Archive Log" : sheetName;
+    const isArchive = sheetName.startsWith("Archive");
+    const targetBackendSheet = isArchive ? "Archive Log" : sheetName;
 
     try {
         const response = await fetch(`${API_URL}?sheet=${encodeURIComponent(targetBackendSheet)}`);
@@ -22,7 +51,10 @@ async function fetchTasks(sheetName) {
         
         if (json && json.masterOperatingDays) {
             masterOperatingDays = json.masterOperatingDays;
-            nextWeekOperatingDays = json.nextWeekOperatingDays || json.masterOperatingDays;
+            nextWeekOperatingDays = json.nextWeekOperatingDays || masterOperatingDays;
+            week2OperatingDays = json.week2OperatingDays || masterOperatingDays;
+            weekDates = json.weekDates || weekDates;
+            weekForms = json.weekForms || weekForms;
             taskData = Array.isArray(json.tasks) ? json.tasks : [];
         } else if (Array.isArray(json)) {
             taskData = json;
@@ -30,38 +62,64 @@ async function fetchTasks(sheetName) {
             taskData = [];
         }
 
-        if (targetBackendSheet === "Archive Log") {
-            filterArchiveDataByWeek();
+        // If viewing Archive, populate the dropdown of archived weeks and filter
+        if (isArchive) {
+            allArchiveRows = [...taskData];
+            populateArchiveDropdown();
         }
         
         renderChecklist();
     } catch (error) {
         console.error("Fetch Error:", error);
-        document.getElementById('checklist-content').innerHTML = "<div style='padding:15px;color:red;'>Error loading data. Verify deployment setup.</div>";
+        contentEl.innerHTML = "<div style='padding:20px;color:#DC2626;font-weight:bold;'>Error loading data. Verify Google Apps Script deployment URL and permissions.</div>";
     }
 }
 
-function filterArchiveDataByWeek() {
-    if (!taskData || taskData.length === 0) return;
+/**
+ * Populates the Archive period dropdown with all unique archived week timestamps (newest first).
+ */
+function populateArchiveDropdown() {
+    const selectEl = document.getElementById('archive-week-select');
+    // Extract unique non-empty timestamps and reverse so most recent archive is first
+    const uniqueStamps = [...new Set(allArchiveRows.map(r => (r.Timestamp || "").toString().trim()))]
+        .filter(Boolean)
+        .reverse();
 
-    const timestamps = [...new Set(taskData.map(t => t.Timestamp))].filter(Boolean);
-    if (timestamps.length === 0) return;
-
-    let targetTimestamp = timestamps[timestamps.length - 1]; // Week 1 (Most recent)
-    if (selectedArchiveWeek === "2" && timestamps.length > 1) {
-        targetTimestamp = timestamps[timestamps.length - 2]; // Week 2 (2 weeks ago)
+    if (uniqueStamps.length === 0) {
+        selectEl.innerHTML = `<option value="">No archived weeks found</option>`;
+        taskData = [];
+        return;
     }
 
-    taskData = taskData.filter(t => t.Timestamp === targetTimestamp);
+    selectEl.innerHTML = uniqueStamps.map((stamp, idx) => {
+        const label = idx === 0 ? `Most Recent — ${stamp}` : 
+                      idx === 1 ? `2 Weeks Ago — ${stamp}` : `Archive — ${stamp}`;
+        return `<option value="${stamp}">${label}</option>`;
+    }).join('');
+
+    selectedArchiveStamp = uniqueStamps[0];
+    taskData = allArchiveRows.filter(r => (r.Timestamp || "").toString().trim() === selectedArchiveStamp);
 }
 
-function changeArchiveWeek(weekVal) {
-    selectedArchiveWeek = weekVal;
-    fetchTasks("Archive Log");
+/**
+ * Switches the displayed archived week instantly from cached rows.
+ */
+function changeArchiveWeek(stamp) {
+    selectedArchiveStamp = stamp;
+    taskData = allArchiveRows.filter(r => (r.Timestamp || "").toString().trim() === stamp);
+    renderChecklist();
 }
+
+// ============================================================================
+// 2. HELPER UTILITIES & UNDO STACK
+// ============================================================================
 
 function getScheduleType(task) {
-    return task.ScheduleType || task["Schedule Type"] || task["ScheduleType"] || "";
+    return (task.ScheduleType || task["Schedule Type"] || "").toString().trim();
+}
+
+function getTaskFrequency(task) {
+    return (task.Frequency || "Every Week").toString().trim();
 }
 
 function toggleEditMode() {
@@ -79,7 +137,7 @@ function toggleEditMode() {
 
 function pushUndoAction(actionObj) {
     undoStack.push(actionObj);
-    if (undoStack.length > 5) undoStack.shift();
+    if (undoStack.length > 5) undoStack.shift(); // Keep last 5 actions
     updateUndoButton();
 }
 
@@ -111,15 +169,22 @@ async function undoLastAction() {
     }
 }
 
+// ============================================================================
+// 3. MAIN MATRIX & MASTER LIST RENDERING
+// ============================================================================
+
 function renderChecklist() {
     const container = document.getElementById('checklist-content');
     container.innerHTML = "";
 
     const isMasterTab = currentTabName === 'Master Task List';
     const isNextWeekTab = currentTabName === 'Next Week';
+    const isWeek2Tab = currentTabName === 'Week 2 Out';
+    const isPlanningTab = isNextWeekTab || isWeek2Tab;
     const isCurrentWeekTab = currentTabName === 'Current Week';
-    const isArchiveTab = currentTabName.startsWith('Archive Log') || currentTabName === 'Archive';
+    const isArchiveTab = currentTabName.startsWith('Archive');
     
+    // Auto-exit Edit Mode when navigating away from Current Week
     if (!isCurrentWeekTab && isEditMode) {
         isEditMode = false;
         const btn = document.getElementById('toggle-edit-btn');
@@ -129,40 +194,79 @@ function renderChecklist() {
         }
     }
 
+    // Update Header Title & Editable Week Date Box
+    const titleMap = {
+        "Current Week": "This Week's Checklist",
+        "Next Week": "Next Week Plan (Week +1)",
+        "Week 2 Out": "2 Weeks Out Plan (Week +2)",
+        "Archive Log": "Archived Checklists",
+        "Master Task List": "Default Week Master List (Forms A & B)"
+    };
+    document.getElementById('view-title').innerText = titleMap[currentTabName] || currentTabName;
+
+    const weekDateContainer = document.getElementById('week-date-container');
+    const formBadge = document.getElementById('active-form-badge');
+    if (isCurrentWeekTab || isPlanningTab) {
+        weekDateContainer.style.display = 'flex';
+        document.getElementById('week-date-input').value = weekDates[currentTabName] || "";
+        formBadge.style.display = 'inline-block';
+        formBadge.innerText = `Form ${weekForms[currentTabName] || "A"}`;
+    } else {
+        weekDateContainer.style.display = 'none';
+        formBadge.style.display = 'none';
+    }
+
+    // Toggle Top Control Bars
     document.getElementById('toggle-edit-btn').style.display = isCurrentWeekTab ? 'inline-block' : 'none';
     document.getElementById('archive-selector-container').style.display = isArchiveTab ? 'flex' : 'none';
     document.getElementById('days-selector-container').style.display = isMasterTab ? 'flex' : 'none';
-    document.getElementById('add-task-container').style.display = (isMasterTab || isNextWeekTab || (isCurrentWeekTab && isEditMode)) ? 'flex' : 'none';
-    document.getElementById('rotate-week-container').style.display = isNextWeekTab ? 'flex' : 'none';
+    document.getElementById('planning-controls-container').style.display = isPlanningTab ? 'flex' : 'none';
+    document.getElementById('add-task-container').style.display = (isMasterTab || isPlanningTab || (isCurrentWeekTab && isEditMode)) ? 'flex' : 'none';
+    
+    // Only show "Rotate Week" button on Next Week tab, and show A/B Frequency dropdown only on Master tab
+    document.getElementById('rotate-btn-wrapper').style.display = isNextWeekTab ? 'flex' : 'none';
+    document.getElementById('new-frequency').style.display = isMasterTab ? 'inline-block' : 'none';
 
-    const allowDragDrop = isNextWeekTab || (isCurrentWeekTab && isEditMode);
-    const allowTextEditing = isNextWeekTab || (isCurrentWeekTab && isEditMode);
-    const hideCompletionControls = isNextWeekTab || (isCurrentWeekTab && isEditMode);
+    if (isPlanningTab) {
+        document.getElementById('planning-form-select').value = weekForms[currentTabName] || "A";
+    }
 
+    // Render Master Task List table if on Default Week tab
     if (isMasterTab) {
         renderDayCheckboxes();
         renderMasterTaskTable(container);
         return;
     }
 
+    // --- MATRIX VIEW RENDERING (This Week, Next Week, 2 Weeks Out, Archive) ---
+    const allowDragDrop = isPlanningTab || (isCurrentWeekTab && isEditMode);
+    const allowTextEditing = isPlanningTab || (isCurrentWeekTab && isEditMode);
+    const hideCompletionControls = isPlanningTab || (isCurrentWeekTab && isEditMode);
+
+    // Determine which days are active for the current view
+    const activeOperatingDays = isNextWeekTab ? nextWeekOperatingDays : 
+                                (isWeek2Tab ? week2OperatingDays : allDays);
+
+    // Count occurrences of each Section + Description pair to identify Daily Core Tasks
     const taskCounts = {};
     taskData.forEach(t => {
-        const desc = t["Task Description"];
-        if (desc) taskCounts[desc] = (taskCounts[desc] || 0) + 1;
+        const key = `${(t.Section || "").trim()}|${(t["Task Description"] || "").trim()}`;
+        taskCounts[key] = (taskCounts[key] || 0) + 1;
     });
 
     const dailyMap = new Map();
     const weeklyTasks = [];
 
     taskData.forEach(t => {
-        const desc = t["Task Description"];
+        const desc = (t["Task Description"] || "").toString().trim();
         if (!desc) return;
 
+        const key = `${(t.Section || "").trim()}|${desc}`;
         const schedType = getScheduleType(t);
-        const isDaily = (schedType === "Daily") || (taskCounts[desc] > 1);
+        const isDaily = (schedType === "Daily") || (taskCounts[key] > 1);
 
         if (isDaily) {
-            if (!dailyMap.has(desc)) dailyMap.set(desc, t);
+            if (!dailyMap.has(key)) dailyMap.set(key, t);
         } else {
             weeklyTasks.push(t);
         }
@@ -171,30 +275,22 @@ function renderChecklist() {
     const table = document.createElement('table');
     table.className = "matrix-table";
 
-    let headerHtml = `
-        <thead>
-            <tr>
-    `;
-    
+    // Build Table Header (Sun - Sat + Task Description)
+    let headerHtml = `<thead><tr>`;
     allDays.forEach(day => {
-        const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
+        const isActive = isPlanningTab ? activeOperatingDays.includes(day) : true;
         headerHtml += `
             <th class="day-col-head ${!isActive ? 'grayed-out' : ''}">
                 ${day}
-                ${isNextWeekTab ? `<br><button class="gray-btn" onclick="toggleNextWeekDay('${day}')">${isActive ? 'Off' : 'On'}</button>` : ''}
+                ${isPlanningTab ? `<br><button class="gray-btn" onclick="togglePlanDay('${day}')">${isActive ? 'Off' : 'On'}</button>` : ''}
             </th>
         `;
     });
-
-    headerHtml += `
-                <th>Task Description</th>
-            </tr>
-        </thead>
-    `;
+    headerHtml += `<th>Task Description</th></tr></thead>`;
 
     let bodyHtml = `<tbody>`;
 
-    // 1. Daily Core Tasks Section
+    // 1. DAILY CORE TASKS SECTION
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Daily Core Tasks</td>
@@ -202,14 +298,18 @@ function renderChecklist() {
         </tr>
     `;
 
-    dailyMap.forEach((masterTask, desc) => {
+    dailyMap.forEach((masterTask, key) => {
+        const desc = masterTask["Task Description"];
+        const section = masterTask.Section || "";
         bodyHtml += `<tr>`;
         
         allDays.forEach(day => {
-            const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
+            const isActive = isPlanningTab ? activeOperatingDays.includes(day) : true;
             
+            // Match exact task entry for this day (case-insensitive)
             const dayEntry = taskData.find(t => 
                 (t["Task Description"] || "").toString().trim().toLowerCase() === desc.trim().toLowerCase() && 
+                (t.Section || "").toString().trim().toLowerCase() === section.trim().toLowerCase() &&
                 (t.Day || "").toString().trim().toLowerCase() === day.trim().toLowerCase()
             );
 
@@ -217,53 +317,59 @@ function renderChecklist() {
                 bodyHtml += `<td class="day-cell grayed-out"></td>`;
             } else if (!dayEntry) {
                 bodyHtml += `<td class="day-cell blocked-cell"></td>`;
+            } else if (hideCompletionControls) {
+                bodyHtml += `<td class="day-cell"><span class="disabled-cell-dash">—</span></td>`;
             } else {
-                if (hideCompletionControls) {
-                    bodyHtml += `<td class="day-cell"><span class="disabled-cell-dash">—</span></td>`;
-                } else {
-                    const initialsVal = (dayEntry.Initials || "").toString().trim();
-                    const hasInitials = initialsVal.length > 0;
-                    bodyHtml += `
-                        <td class="day-cell">
-                            <div class="compact-cell-content">
-                                <input type="text" class="cell-initials ${hasInitials ? 'has-initials' : ''}" 
-                                       value="${initialsVal}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
-                                       onblur="handleAsyncInitials(${dayEntry.rowNum}, this.value)">
-                            </div>
-                        </td>
-                    `;
-                }
+                const initialsVal = (dayEntry.Initials || "").toString().trim();
+                const hasInitials = initialsVal.length > 0;
+                bodyHtml += `
+                    <td class="day-cell">
+                        <div class="compact-cell-content">
+                            <input type="text" class="cell-initials ${hasInitials ? 'has-initials' : ''}" 
+                                   value="${initialsVal}" placeholder="—" maxlength="4" ${isArchiveTab ? 'disabled' : ''}
+                                   onblur="handleAsyncInitials(${dayEntry.rowNum}, this.value)">
+                        </div>
+                    </td>
+                `;
             }
         });
 
-        const rowItem = dailyMap.get(desc);
-        if (allowTextEditing && rowItem) {
+        // Task Description Cell (Inline Editable in Edit Mode / Planning Tabs)
+        if (allowTextEditing) {
             bodyHtml += `
                 <td class="task-desc-cell">
-                    <input type="text" class="edit-cell-input" value="${desc}" onblur="handleAsyncDescEdit(${rowItem.rowNum}, this.value)">
+                    <div class="inline-edit-wrap">
+                        <input type="text" class="edit-section-input" value="${section}" placeholder="Section"
+                               onblur="handleDailyGroupEdit('${escapeQuotes(section)}', '${escapeQuotes(desc)}', this.value, '${escapeQuotes(desc)}')">
+                        <input type="text" class="edit-cell-input" value="${desc}" 
+                               onblur="handleDailyGroupEdit('${escapeQuotes(section)}', '${escapeQuotes(desc)}', '${escapeQuotes(section)}', this.value)">
+                        <button class="action-btn danger-btn" title="Delete Daily Task" onclick="deleteDailyTaskGroup('${escapeQuotes(section)}', '${escapeQuotes(desc)}')">✕</button>
+                    </div>
                 </td>
             `;
         } else {
-            bodyHtml += `<td class="task-desc-cell"><strong>${masterTask.Section ? masterTask.Section + ': ' : ''}</strong>${desc}</td>`;
+            bodyHtml += `<td class="task-desc-cell"><strong>${section ? section + ': ' : ''}</strong>${desc}</td>`;
         }
         
         bodyHtml += `</tr>`;
     });
 
-    // 2. Weekly Scheduled Tasks Section
+    // 2. WEEKLY SCHEDULED TASKS SECTION
     bodyHtml += `
         <tr class="section-divider-row">
             <td colspan="7">Weekly Scheduled Tasks</td>
-            <td>Specific Scheduled Day Tasks ${allowDragDrop ? '(Drag cell to reassign day)' : ''}</td>
+            <td>Specific Scheduled Day Tasks ${allowDragDrop ? '(Drag yellow cell to reassign day)' : ''}</td>
         </tr>
     `;
 
     weeklyTasks.forEach(task => {
         bodyHtml += `<tr>`;
         const taskDay = (task.Day || "").toString().trim().toLowerCase();
+        const section = task.Section || "";
+        const desc = task["Task Description"] || "";
 
         allDays.forEach(day => {
-            const isActive = isNextWeekTab ? nextWeekOperatingDays.includes(day) : true;
+            const isActive = isPlanningTab ? activeOperatingDays.includes(day) : true;
             const isAssignedDay = taskDay === day.trim().toLowerCase();
 
             const dropAttributes = allowDragDrop ? `
@@ -294,9 +400,8 @@ function renderChecklist() {
                     bodyHtml += `
                         <td ${dragAttributes} ${dropAttributes}>
                             <div class="compact-cell-content">
-                                ${allowDragDrop ? '<span class="drag-handle" title="Drag to move day">⋮⋮</span>' : ''}
                                 <input type="text" class="cell-initials ${hasInitials ? 'has-initials' : ''}" 
-                                       value="${initialsVal}" placeholder="Init" maxlength="3" ${isArchiveTab ? 'disabled' : ''}
+                                       value="${initialsVal}" placeholder="—" maxlength="4" ${isArchiveTab ? 'disabled' : ''}
                                        onblur="handleAsyncInitials(${task.rowNum}, this.value)">
                             </div>
                         </td>
@@ -310,11 +415,17 @@ function renderChecklist() {
         if (allowTextEditing) {
             bodyHtml += `
                 <td class="task-desc-cell">
-                    <input type="text" class="edit-cell-input" value="${task["Task Description"]}" onblur="handleAsyncDescEdit(${task.rowNum}, this.value)">
+                    <div class="inline-edit-wrap">
+                        <input type="text" class="edit-section-input" value="${section}" placeholder="Section"
+                               onblur="handleAsyncFieldEdit(${task.rowNum}, 'Section', 2, this.value)">
+                        <input type="text" class="edit-cell-input" value="${desc}" 
+                               onblur="handleAsyncFieldEdit(${task.rowNum}, 'Task Description', 3, this.value)">
+                        <button class="action-btn danger-btn" title="Delete Task" onclick="deleteSingleTask(${task.rowNum})">✕</button>
+                    </div>
                 </td>
             `;
         } else {
-            bodyHtml += `<td class="task-desc-cell"><strong>${task.Section ? task.Section + ': ' : ''}</strong>${task["Task Description"]}</td>`;
+            bodyHtml += `<td class="task-desc-cell"><strong>${section ? section + ': ' : ''}</strong>${desc}</td>`;
         }
 
         bodyHtml += `</tr>`;
@@ -325,9 +436,12 @@ function renderChecklist() {
     container.appendChild(table);
 }
 
+/**
+ * Renders the Master Task List ("Default Week") with A/B Frequency dropdowns and drag reordering.
+ */
 function renderMasterTaskTable(container) {
     if (taskData.length === 0) {
-        container.innerHTML = "<div style='padding: 20px; text-align: center;'>No tasks found in Default Week. Add a task above or run database setup script.</div>";
+        container.innerHTML = "<div style='padding: 20px; text-align: center;'>No tasks found in Default Week. Use the bar above to add tasks.</div>";
         return;
     }
 
@@ -339,18 +453,20 @@ function renderMasterTaskTable(container) {
         <table class="matrix-table master-table">
             <thead>
                 <tr>
-                    <th style="width: 5%;"></th>
-                    <th style="width: 20%;">Section</th>
-                    <th style="width: 50%;">Task Description</th>
-                    <th style="width: 15%;">Schedule Type</th>
-                    <th style="width: 10%;">Action</th>
+                    <th style="width: 4%;"></th>
+                    <th style="width: 18%;">Section</th>
+                    <th style="width: 44%;">Task Description</th>
+                    <th style="width: 12%;">Day / Daily</th>
+                    <th style="width: 14%;">Week Form (A/B)</th>
+                    <th style="width: 8%;">Delete</th>
                 </tr>
             </thead>
-            <tbody id="master-task-tbody">
+            <tbody>
     `;
 
     taskData.forEach((task, index) => {
         const schedType = getScheduleType(task);
+        const freq = getTaskFrequency(task);
 
         html += `
             <tr class="draggable-row" draggable="true" 
@@ -371,79 +487,69 @@ function renderMasterTaskTable(container) {
                         ${allDays.map(d => `<option value="${d}" ${schedType === d ? 'selected' : ''}>${d}</option>`).join('')}
                     </select>
                 </td>
+                <td>
+                    <select style="width:100%;" onchange="updateMasterTask(${task.rowNum}, 4, this.value)">
+                        <option value="Every Week" ${freq === 'Every Week' ? 'selected' : ''}>Every Week</option>
+                        <option value="Week A" ${freq === 'Week A' ? 'selected' : ''}>Week A</option>
+                        <option value="Week B" ${freq === 'Week B' ? 'selected' : ''}>Week B</option>
+                    </select>
+                </td>
                 <td style="text-align: center;">
-                    <button class="action-btn danger-btn" onclick="deleteMasterTask(${task.rowNum})">Delete</button>
+                    <button class="action-btn danger-btn" onclick="deleteSingleTask(${task.rowNum})">✕</button>
                 </td>
             </tr>
         `;
     });
 
-    html += `
-            </tbody>
-        </table>
-    `;
-
+    html += `</tbody></table>`;
     tableWrapper.innerHTML = html;
     container.appendChild(tableWrapper);
 }
 
-function handleMasterRowDragStart(event, index) {
-    draggedRowIndex = index;
-    event.dataTransfer.effectAllowed = "move";
-}
-
-async function handleMasterRowDrop(event, targetIndex) {
-    event.preventDefault();
-    event.currentTarget.classList.remove('drag-over-row');
-
-    if (draggedRowIndex === null || draggedRowIndex === targetIndex) return;
-
-    const movedItem = taskData.splice(draggedRowIndex, 1)[0];
-    taskData.splice(targetIndex, 0, movedItem);
-
-    draggedRowIndex = null;
-    renderChecklist();
-    await syncMasterTaskOrder();
-}
-
-async function syncMasterTaskOrder() {
-    const payload = taskData.map(t => ({
-        section: t.Section || "",
-        desc: t["Task Description"] || "",
-        schedule: getScheduleType(t)
-    }));
-
-    await fetch(API_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reorderMasterTasks", tasks: payload })
-    });
-}
+// ============================================================================
+// 4. OPTIMISTIC ASYNC MUTATIONS & DRAG-AND-DROP HANDLERS
+// ============================================================================
 
 async function handleAsyncInitials(rowNum, initials) {
     const item = taskData.find(t => t.rowNum == rowNum);
-    if (item && item.Initials !== initials) {
-        pushUndoAction({ type: 'cell', rowNum, field: 'Initials', oldValue: item.Initials, colNum: 5, sheet: currentTabName });
+    if (item && (item.Initials || "") !== initials) {
+        pushUndoAction({ type: 'cell', rowNum, field: 'Initials', oldValue: item.Initials || "", colNum: 5, sheet: currentTabName });
         item.Initials = initials;
-        
         const isDone = (initials && initials.trim().length > 0) ? "TRUE" : "FALSE";
         item['Done?'] = isDone;
 
         renderChecklist();
-        
         await updateCellOnSheet(rowNum, 4, isDone, currentTabName);
         await updateCellOnSheet(rowNum, 5, initials, currentTabName);
     }
 }
 
-async function handleAsyncDescEdit(rowNum, newDesc) {
+async function handleAsyncFieldEdit(rowNum, fieldName, colNum, newValue) {
     const item = taskData.find(t => t.rowNum == rowNum);
-    if (item && item["Task Description"] !== newDesc) {
-        pushUndoAction({ type: 'cell', rowNum, field: 'Task Description', oldValue: item["Task Description"], colNum: 3, sheet: currentTabName });
-        item["Task Description"] = newDesc;
+    if (item && (item[fieldName] || "") !== newValue) {
+        pushUndoAction({ type: 'cell', rowNum, field: fieldName, oldValue: item[fieldName] || "", colNum, sheet: currentTabName });
+        item[fieldName] = newValue;
         renderChecklist();
-        await updateCellOnSheet(rowNum, 3, newDesc, currentTabName);
+        await updateCellOnSheet(rowNum, colNum, newValue, currentTabName);
+    }
+}
+
+/**
+ * Updates Section and/or Description across all day rows of a Daily task simultaneously.
+ */
+async function handleDailyGroupEdit(oldSec, oldDesc, newSec, newDesc) {
+    if (oldSec === newSec && oldDesc === newDesc) return;
+    
+    const matchingRows = taskData.filter(t => (t.Section || "") === oldSec && (t["Task Description"] || "") === oldDesc);
+    matchingRows.forEach(r => {
+        r.Section = newSec;
+        r["Task Description"] = newDesc;
+    });
+    renderChecklist();
+
+    for (const r of matchingRows) {
+        if (oldSec !== newSec) await updateCellOnSheet(r.rowNum, 2, newSec, currentTabName);
+        if (oldDesc !== newDesc) await updateCellOnSheet(r.rowNum, 3, newDesc, currentTabName);
     }
 }
 
@@ -465,96 +571,69 @@ async function handleTaskDrop(event, rowNum, newDay) {
     }
 }
 
-async function triggerNextWeekReset() {
-    const confirmReset = confirm("Are you sure you want to reset Next Week?\n\nThis will clear all custom day assignments in Next Week and repopulate tasks strictly from the Default Week master list.");
-    if (!confirmReset) return;
-
-    document.getElementById('checklist-content').innerHTML = "<div style='padding:20px;text-align:center;'>Resetting Next Week from Default Week...</div>";
-
-    try {
-        await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({ action: "resetNextWeek" })
-        });
-        
-        alert("Next Week has been successfully reset from Default Week!");
-        fetchTasks("Next Week");
-    } catch (error) {
-        console.error("Reset error:", error);
-        alert("Error resetting Next Week. Verify Apps Script deployment.");
-        fetchTasks("Next Week");
-    }
+// Master List Row Reordering
+function handleMasterRowDragStart(event, index) {
+    draggedRowIndex = index;
+    event.dataTransfer.effectAllowed = "move";
 }
 
-async function triggerWeekRotation() {
-    const confirm1 = confirm("Are you sure you want to rotate the weeks?\n\nThis will:\n1. Move completed 'This Week' tasks into 'Last Week' (Archive).\n2. Promote 'Next Week' into 'This Week'.\n3. Reset 'Next Week' from Default Week.");
-    if (!confirm1) return;
+async function handleMasterRowDrop(event, targetIndex) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over-row');
+    if (draggedRowIndex === null || draggedRowIndex === targetIndex) return;
 
-    const confirm2 = confirm("FINAL CONFIRMATION:\n\nAre you completely sure? This action will overwrite the current active week and cannot be undone.");
-    if (!confirm2) return;
-
-    document.getElementById('checklist-content').innerHTML = "<div style='padding:20px;text-align:center;'>Rotating week and updating database...</div>";
-
-    try {
-        const response = await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({ action: "rotateWeek" })
-        });
-        
-        const result = await response.json();
-        
-        if (result && result.status === "error") {
-            alert("⚠️ ROTATION BLOCKED:\n\n" + result.message);
-            fetchTasks("Next Week");
-            return;
-        }
-
-        alert("Week successfully rotated! Loading new Current Week...");
-        switchTab('Current Week', document.querySelectorAll('.nav-btn')[0]);
-    } catch (error) {
-        console.error("Rotation error:", error);
-        alert("Error performing rotation. Verify Apps Script deployment.");
-        fetchTasks("Next Week");
-    }
-}
-
-async function toggleNextWeekDay(day) {
-    if (nextWeekOperatingDays.includes(day)) {
-        nextWeekOperatingDays = nextWeekOperatingDays.filter(d => d !== day);
-    } else {
-        nextWeekOperatingDays.push(day);
-    }
-    await fetch(API_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveNextWeekOperatingDays", days: nextWeekOperatingDays })
-    });
+    const movedItem = taskData.splice(draggedRowIndex, 1)[0];
+    taskData.splice(targetIndex, 0, movedItem);
+    draggedRowIndex = null;
     renderChecklist();
+
+    const payload = taskData.map(t => ({
+        section: t.Section || "",
+        desc: t["Task Description"] || "",
+        schedule: getScheduleType(t),
+        frequency: getTaskFrequency(t)
+    }));
+
+    await sendPost({ action: "reorderMasterTasks", tasks: payload });
+}
+
+// ============================================================================
+// 5. WEEK CONTROLS, ADD/DELETE TASKS & ROTATION
+// ============================================================================
+
+async function saveWeekDate(dateText) {
+    if (weekDates[currentTabName] === dateText) return;
+    weekDates[currentTabName] = dateText;
+    await sendPost({ action: "saveWeekDate", sheet: currentTabName, dateText: dateText });
+}
+
+async function togglePlanDay(day) {
+    let targetArr = (currentTabName === "Week 2 Out") ? week2OperatingDays : nextWeekOperatingDays;
+    if (targetArr.includes(day)) {
+        targetArr = targetArr.filter(d => d !== day);
+    } else {
+        targetArr.push(day);
+    }
+
+    if (currentTabName === "Week 2 Out") week2OperatingDays = targetArr;
+    else nextWeekOperatingDays = targetArr;
+
+    renderChecklist();
+    await sendPost({ action: "savePlanOperatingDays", sheet: currentTabName, days: targetArr });
 }
 
 function renderDayCheckboxes() {
     const boxContainer = document.getElementById('day-checkboxes');
     boxContainer.innerHTML = allDays.map(d => `
-        <label>
-            <input type="checkbox" value="${d}" ${masterOperatingDays.includes(d) ? 'checked' : ''}> ${d}
-        </label>
+        <label><input type="checkbox" value="${d}" ${masterOperatingDays.includes(d) ? 'checked' : ''}> ${d}</label>
     `).join('');
 }
 
 async function saveOperatingDays() {
     const checked = Array.from(document.querySelectorAll('#day-checkboxes input:checked')).map(cb => cb.value);
     masterOperatingDays = checked;
-    await fetch(API_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "saveMasterOperatingDays", days: checked })
-    });
-    alert("Master Operating Days updated!");
-    renderChecklist();
+    await sendPost({ action: "saveMasterOperatingDays", days: checked });
+    alert("Default Operating Days saved!");
 }
 
 async function updateMasterTask(rowNum, colNum, value) {
@@ -562,51 +641,101 @@ async function updateMasterTask(rowNum, colNum, value) {
 }
 
 async function addNewTask() {
-    const section = document.getElementById('new-section').value;
-    const desc = document.getElementById('new-desc').value;
+    const section = document.getElementById('new-section').value.trim();
+    const desc = document.getElementById('new-desc').value.trim();
     const schedule = document.getElementById('new-schedule').value;
+    const frequency = document.getElementById('new-frequency').value;
     
     if (!desc) { alert("Please enter a task description."); return; }
-    
-    const targetSheet = (currentTabName === 'Next Week') ? "Next Week" : (currentTabName === 'Current Week' ? "Current Week" : "Master Task List");
 
-    await fetch(API_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            action: "addTask", 
-            section: section, 
-            desc: desc, 
-            schedule: schedule,
-            sheet: targetSheet
-        })
-    });
-    
     document.getElementById('new-section').value = "";
     document.getElementById('new-desc').value = "";
-    fetchTasks(targetSheet);
+
+    await sendPost({ 
+        action: "addTask", 
+        section: section, 
+        desc: desc, 
+        schedule: schedule,
+        frequency: frequency,
+        sheet: currentTabName
+    });
+    
+    fetchTasks(currentTabName);
 }
 
-async function deleteMasterTask(rowNum) {
-    if (confirm("Delete this task from Default Week?")) {
-        await fetch(API_URL, {
+async function deleteSingleTask(rowNum) {
+    if (!confirm("Delete this task?")) return;
+    taskData = taskData.filter(t => t.rowNum != rowNum);
+    renderChecklist();
+    await sendPost({ action: "deleteTask", rowNum: rowNum, sheet: currentTabName });
+    fetchTasks(currentTabName); // Refresh row numbers
+}
+
+async function deleteDailyTaskGroup(section, desc) {
+    if (!confirm(`Delete "${desc}" from all days on this sheet?`)) return;
+    taskData = taskData.filter(t => !((t.Section || "") === section && (t["Task Description"] || "") === desc));
+    renderChecklist();
+    await sendPost({ action: "deleteDailyTaskGroup", section: section, desc: desc, sheet: currentTabName });
+    fetchTasks(currentTabName);
+}
+
+async function triggerSheetReset() {
+    const chosenForm = document.getElementById('planning-form-select').value;
+    if (!confirm(`Reset "${currentTabName}" using Default Week (Form ${chosenForm})?\n\nThis will replace current tasks on this tab.`)) return;
+
+    document.getElementById('checklist-content').innerHTML = `<div style='padding:20px;text-align:center;'>Populating ${currentTabName} from Default Week (Form ${chosenForm})...</div>`;
+    await sendPost({ action: "resetPlanningSheet", sheet: currentTabName, form: chosenForm });
+    fetchTasks(currentTabName);
+}
+
+async function triggerWeekRotation() {
+    if (!confirm("Rotate Weeks?\n\n• Archives 'This Week'\n• Moves 'Next Week' → 'This Week'\n• Moves '2 Weeks Out' → 'Next Week'\n• Auto-generates next alternating Form for '2 Weeks Out'")) return;
+    if (!confirm("FINAL CONFIRMATION: Proceed with weekly rotation?")) return;
+
+    document.getElementById('checklist-content').innerHTML = "<div style='padding:20px;text-align:center;'>Archiving and shifting 2-week schedule...</div>";
+
+    try {
+        const response = await fetch(API_URL, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "deleteTask", rowNum })
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({ action: "rotateWeek" })
         });
-        fetchTasks("Master Task List");
+        const result = await response.json();
+        
+        if (result && result.status === "error") {
+            alert("⚠️ ROTATION BLOCKED:\n\n" + result.message);
+            fetchTasks(currentTabName);
+            return;
+        }
+
+        alert("Schedule rotated successfully!");
+        switchTab('Current Week', document.querySelectorAll('.nav-btn')[0]);
+    } catch (error) {
+        console.error("Rotation Error:", error);
+        alert("Error rotating weeks. Verify Apps Script deployment.");
+        fetchTasks(currentTabName);
     }
 }
 
+// ============================================================================
+// 6. NETWORK HELPERS & TAB NAVIGATION
+// ============================================================================
+
 async function updateCellOnSheet(rowNum, colNum, value, sheet) {
+    await sendPost({ action: "updateCell", rowNum, colNum, value, sheet });
+}
+
+async function sendPost(payloadObj) {
     await fetch(API_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "updateCell", rowNum, colNum, value, sheet })
+        body: JSON.stringify(payloadObj)
     });
+}
+
+function escapeQuotes(str) {
+    return (str || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
 }
 
 function switchTab(tabName, btnElement) {
@@ -618,4 +747,5 @@ function switchTab(tabName, btnElement) {
     fetchTasks(tabName);
 }
 
+// Initial load
 fetchTasks("Current Week");
