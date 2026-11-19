@@ -3,58 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Center Cleaning Checklist</title>
+    <title>Mathnasium | Center Cleaning Checklist</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-    <div class="navbar">
-        <button class="nav-btn active" onclick="switchTab('Current Week', this)">This Week</button>
-        <button class="nav-btn" onclick="switchTab('Archive Log', this)">Archive</button>
-        <button class="nav-btn" onclick="switchTab('Next Week', this)">Next Week</button>
-        <button class="nav-btn" onclick="switchTab('Master Task List', this)">Default Week</button>
-    </div>
+    <!-- Top Navigation Bar (Mathnasium Branded) -->
+    <nav class="navbar">
+        <div class="brand-logo">
+            <span class="brand-plus">A+</span>
+            <span class="brand-title">MATHNASIUM <small>CLEANING MATRIX</small></span>
+        </div>
+        <div class="nav-links">
+            <button class="nav-btn active" onclick="switchTab('Current Week', this)">This Week</button>
+            <button class="nav-btn" onclick="switchTab('Next Week', this)">Next Week</button>
+            <button class="nav-btn" onclick="switchTab('Week 2 Out', this)">2 Weeks Out</button>
+            <button class="nav-btn" onclick="switchTab('Archive Log', this)">Archive</button>
+            <button class="nav-btn" onclick="switchTab('Master Task List', this)">Default Week (A/B)</button>
+        </div>
+    </nav>
 
     <div class="container">
+        <!-- Main Header with Editable Week Date, Undo, Edit Mode & Reminder -->
         <div class="header-bar">
-            <h2>Cleaning Checklist Dashboard</h2>
+            <div class="header-left">
+                <h2 id="view-title">This Week's Checklist</h2>
+                <!-- Editable Week Date Badge (Visible on Active & Planning Weeks) -->
+                <div id="week-date-container" class="week-date-box">
+                    <label for="week-date-input">📅 Week Of:</label>
+                    <input type="text" id="week-date-input" placeholder="e.g. Nov 22 - Nov 28" onblur="saveWeekDate(this.value)">
+                </div>
+                <span id="active-form-badge" class="form-badge" style="display: none;">Form A</span>
+            </div>
+
             <div class="header-right-controls">
                 <button id="undo-btn" class="action-btn undo-btn" style="display: none;" onclick="undoLastAction()">↩ Undo (0)</button>
                 <button id="toggle-edit-btn" class="action-btn edit-toggle-btn" onclick="toggleEditMode()">✏️ Edit Mode</button>
-                <div class="reminder">REMINDER: Report Behavior issues to CD right away.</div>
+                <div class="reminder">⚠️ REMINDER: Report behavior issues to CD right away.</div>
             </div>
         </div>
 
-        <!-- Archive Selector Bar -->
-        <div id="archive-selector-container" class="days-selector-bar" style="display: none;">
-            <strong>Select Archive Period:</strong>
-            <select id="archive-week-select" onchange="changeArchiveWeek(this.value)">
-                <option value="1">Week 1 (Last Week)</option>
-                <option value="2">Week 2 (2 Weeks Ago)</option>
-            </select>
+        <!-- Archive Period Selector (Visible on Archive Tab) -->
+        <div id="archive-selector-container" class="control-bar" style="display: none;">
+            <div class="bar-group">
+                <strong>🗄️ Archive History:</strong>
+                <select id="archive-week-select" onchange="changeArchiveWeek(this.value)">
+                    <!-- Dynamically populated with archived dates -->
+                </select>
+            </div>
+            <span class="hint-text">Archived weeks are read-only snapshots.</span>
         </div>
 
-        <!-- Rotate & Reset Week Bar (Next Week Tab) -->
-        <div id="rotate-week-container" class="rotate-week-bar" style="display: none;">
-            <span>Next Week Controls:</span>
-            <div style="display: flex; gap: 8px;">
-                <button class="action-btn reset-btn" onclick="triggerNextWeekReset()">↺ Reset to Default Week</button>
-                <button class="action-btn rotate-btn" onclick="triggerWeekRotation()">🔄 Promote Next Week to Current Week & Archive</button>
+        <!-- Planning Controls: Form A/B Reset & Week Promotion (Visible on Next Week & 2 Weeks Out) -->
+        <div id="planning-controls-container" class="control-bar planning-bar" style="display: none;">
+            <div class="bar-group">
+                <span>📋 Template Form:</span>
+                <select id="planning-form-select">
+                    <option value="A">Default Week A</option>
+                    <option value="B">Default Week B</option>
+                </select>
+                <button class="action-btn reset-btn" onclick="triggerSheetReset()">↺ Reset Sheet to Selected Form</button>
+            </div>
+            <div id="rotate-btn-wrapper" class="bar-group">
+                <button class="action-btn rotate-btn" onclick="triggerWeekRotation()">🔄 Archive This Week & Shift Schedule Forward</button>
             </div>
         </div>
 
-        <!-- Operating Days Selector (Default Week Tab) -->
-        <div id="days-selector-container" class="days-selector-bar" style="display: none;">
-            <strong>Default Operating Days:</strong>
-            <div id="day-checkboxes"></div>
-            <button class="action-btn" onclick="saveOperatingDays()">Save Operating Days</button>
+        <!-- Operating Days Selector (Visible on Default Week Tab) -->
+        <div id="days-selector-container" class="control-bar" style="display: none;">
+            <div class="bar-group">
+                <strong>🗓️ Default Operating Days:</strong>
+                <div id="day-checkboxes" class="checkbox-group"></div>
+                <button class="action-btn primary-btn" onclick="saveOperatingDays()">Save Operating Days</button>
+            </div>
+            <span class="hint-text">Drag rows (⋮⋮) to reorder • Assign weekly tasks to Every Week, Week A, or Week B</span>
         </div>
 
-        <!-- Add Task Bar -->
-        <div id="add-task-container" class="add-task-bar" style="display: none;">
-            <input type="text" id="new-section" placeholder="Section (e.g. Kitchen)">
-            <input type="text" id="new-desc" placeholder="Task Description">
-            <select id="new-schedule">
+        <!-- On-Page Add Task Bar (Visible on Default Week, Next Week, 2 Weeks Out, and Current Week Edit Mode) -->
+        <div id="add-task-container" class="control-bar add-task-bar" style="display: none;">
+            <input type="text" id="new-section" placeholder="Section (e.g. Kitchen 1)" style="max-width: 160px;">
+            <input type="text" id="new-desc" placeholder="New Task Description...">
+            <select id="new-schedule" title="Day or Daily">
+                <option value="Daily">Daily (All Active Days)</option>
                 <option value="Sun">Sun</option>
                 <option value="Mon">Mon</option>
                 <option value="Tues">Tues</option>
@@ -63,9 +93,16 @@
                 <option value="Fri">Fri</option>
                 <option value="Sat">Sat</option>
             </select>
+            <!-- A/B Frequency selector shown when adding to Default Week -->
+            <select id="new-frequency" title="Alternating Week Form">
+                <option value="Every Week">Every Week</option>
+                <option value="Week A">Week A Only</option>
+                <option value="Week B">Week B Only</option>
+            </select>
             <button class="action-btn green-btn" onclick="addNewTask()">+ Add Task</button>
         </div>
 
+        <!-- Main Matrix / Master Table Viewport -->
         <div id="checklist-content">Loading checklist matrix...</div>
     </div>
 
